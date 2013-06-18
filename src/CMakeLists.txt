@@ -5,7 +5,7 @@ Project(zbtunnel)
 
 set(Boost_USE_STATIC_LIBS TRUE)
 
-find_package(Boost COMPONENTS system thread)
+find_package(Boost 1.47.0 COMPONENTS system thread)
 if (NOT Boost_FOUND)
 set(BOOST_ROOT "d:/repo/boost")
 set(BOOST_LIBRARYDIR "d:/repo/boost/lib")
@@ -25,6 +25,12 @@ if (WIN32)
 	set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} /LTCG ")
 	set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /LTCG ")
 endif ()
+
+if (UNIX) 
+    set(CMAKE_CXX_FLAGS "-std=c++0x")
+    set(CMAKE_EXE_LINKER_FLAGS "-lrt")
+endif ()
+    
 
 
 file (GLOB DLL RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}

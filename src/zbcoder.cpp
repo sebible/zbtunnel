@@ -20,7 +20,7 @@ namespace zb {
 		return ZbCoderPool::instance_;
 	}
 
-	ZbCoderPool::coder_type ZbCoderPool::get_coder(string method, string key) {
+	ZbCoderPool::coder_type ZbCoderPool::get_coder(string method, string key) throw (string){
 		key_type k(method, key);
 		pool_type::iterator iter = pool_.find(k);
 		if (iter != pool_.end())

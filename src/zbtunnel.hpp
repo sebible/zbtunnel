@@ -68,7 +68,7 @@ namespace zb {
 	class ZbTunnel:
 		public boost::enable_shared_from_this<ZbTunnel>
 	{
-		friend ZbConnection;
+		friend class ZbConnection;
 
 	public:
 		typedef shared_ptr<ZbTunnel> pointer;

@@ -139,3 +139,4 @@ namespace zb {
 #define CONFIG_GET_INT(conf, name, _default) conf.count(name) ? boost::lexical_cast<int>(conf[name]) : _default
 #define THROW(str) throw string(str)	
 #define STATETHROW(str)	_state_throw(str)
+

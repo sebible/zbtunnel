@@ -41,7 +41,7 @@ namespace zb {
 		typedef uint8_t* data_type;
 		typedef ZbTransport lowest_layer_type;
 
-		ZbTransport(pointer& parent):parent_(parent) {
+		ZbTransport(const pointer& parent):parent_(parent) {
 			if (parent_.get() && parent->io_service_.get() != 0)
 				io_service_ = parent->io_service_;
 		};
@@ -143,7 +143,7 @@ namespace zb {
 	public:
 		typedef shared_ptr<ZbSocketTransport> pointer;
 
-		ZbSocketTransport(socket_ptr& socket, shared_ptr<io_service> service):ZbTransport(ZbTransport::pointer()), socket_(socket) {
+		ZbSocketTransport(const socket_ptr& socket, shared_ptr<io_service> service):ZbTransport(ZbTransport::pointer()), socket_(socket) {
 			io_service_ = service;
 		};
 
