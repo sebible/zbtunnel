@@ -240,13 +240,24 @@ namespace zb {
 #else // Posix down here
 	class ZbStreamTransport: public ZbTransport {
 	protected:
-		posix::stream_descriptor in_;
+                boost::asio::posix::stream_descriptor in_, out_;
 
 	public:
 		typedef shared_ptr<ZbStreamTransport> pointer;
 
-		ZbStreamTransport(shared_ptr<io_service> service):ZbTransport(ZbTransport::pointer()),in_(service, ::dup(STDIN_FILENO) {
+		ZbStreamTransport(shared_ptr<io_service> service):ZbTransport(ZbTransport::pointer()),in_(*service),out_(*service) {
 			io_service_ = service;
+#ifndef WIN32
+#ifndef DISABLE_EPOLL
+                        struct stat s;
+                        fstat(STDIN_FILENO, &s);
+                        if (S_ISREG(s.st_mode) || S_ISDIR(s.st_mode)) {
+                            throw string("Not supported input type with epoll");
+                        }
+#endif
+                        in_.assign(::dup(STDIN_FILENO));
+                        out_.assign(::dup(STDOUT_FILENO));
+#endif
 		}
 
 		~ZbStreamTransport() {
@@ -264,7 +275,7 @@ namespace zb {
 		virtual void async_send(const data_type data,const size_t size,
 			BOOST_ASIO_MOVE_ARG(write_handler_type) handler) {
 
-			boost::asio::async_send(in_, boost::asio::buffer(data, size), handler);
+                        boost::asio::async_write(out_, boost::asio::buffer(data, size), handler);
 		}
 
 		virtual void async_receive(const data_type& data, const size_t& size,
@@ -273,7 +284,7 @@ namespace zb {
 			in_.async_read_some(boost::asio::buffer(data, size), handler);			
 		}
 
-	}
+	};
 #endif // Win32
 
 	/////////////////////////////////////

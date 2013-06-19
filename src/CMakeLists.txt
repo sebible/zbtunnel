@@ -4,6 +4,8 @@ set (CMAKE_BACKWARDS_COMPATIBILITY 2.6)
 Project(zbtunnel)
 
 option(WITH_OPENSSL "Use openssl or not." ON)
+option(DISABLE_EPOLL "Disable epoll to support taking file stream as input on
+posix" OFF)
 set(ZB_DISPLAY_NAME "ZbTunnel")
 set(ZB_VERSION "1.0")
 

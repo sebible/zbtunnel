@@ -5,7 +5,12 @@
 string banner() {
 	return string(DISPLAY_NAME " " VERSION 
 #ifdef WITH_OPENSSL
-	" (compiled with openssl)" 
+	" openssl" 
+#endif
+#ifndef WIN32
+#ifndef DISABLE_EPOLL
+        " epoll"
+#endif
 #endif
 	"\n");
 }
@@ -66,7 +71,7 @@ int main(int argc, char **argv) {
 				gconf.allow_reuse(global.get<bool>("log_level", gconf.allow_reuse()));
 			} else if (node.first.compare("-") == 0) {
 				if (tunnels.size() > 0) 
-					throw std::exception("The io tunnel should be the only tunnel in the config");
+					throw "The io tunnel should be the only tunnel in the config";
 				
 				boost::shared_ptr<zb::ZbTunnel> t(new zb::ZbIoTunnel(node.first));
 				tunnels.insert(t);
@@ -96,9 +101,11 @@ int main(int argc, char **argv) {
 		quit(2);
 	} catch (std::exception& e) {
 		*err << e.what() << "\n";
-		throw;
 		quit(2);
-	}
-	
+	} catch (string& e) {
+		*err << e << "\n";
+		quit(2);
+        }
+
 	return 0;
 }

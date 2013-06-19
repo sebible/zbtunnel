@@ -25,6 +25,7 @@
 #pragma once
 
 #cmakedefine WITH_OPENSSL
+#cmakedefine DISABLE_EPOLL
 #define DISPLAY_NAME "@ZB_DISPLAY_NAME@"
 #define VERSION "@ZB_VERSION@"
 

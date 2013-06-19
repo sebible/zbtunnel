@@ -28,6 +28,17 @@
 
 #define UA_STRING DISPLAY_NAME"/"VERSION
 
+#ifdef DISABLE_EPOLL
+#define BOOST_ASIO_DISABLE_EPOLL
+#endif
+
+#if defined(__CYGWIN__) 
+#  define _WIN32_WINNT 0x0501 
+#  define __USE_W32_SOCKETS 
+#  undef BOOST_POSIX_API 
+#  define BOOST_WINDOWS_API 
+#endif 
+
 #include <boost/asio.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <boost/chrono.hpp>
@@ -48,6 +59,8 @@
 #ifdef WIN32
 #include <windows.h>
 #include <conio.h>
+#else
+#include <unistd.h>
 #endif
 
 #include <string>
@@ -137,7 +150,7 @@ namespace zb {
 		void _dummy_log(int filter, log_level_type level, string& module, string& msg) {
 			if (level < log_level_) return;
 			if (level < LOG_WARN && (filter & log_filter_) == 0) return;
-			static char* str[3] = {"DEBUG", "WARN", "NONE"};
+			static const char* str[3] = {"DEBUG", "WARN", "NONE"};
 			if (out_) *out_ << module + "[" + str[level] + "]: " + msg + "\n";
 		};
 	};
