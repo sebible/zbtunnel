@@ -26,9 +26,14 @@ if (WIN32)
 	set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /LTCG ")
 endif ()
 
-if (UNIX) 
+if (UNIX AND NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin") 
     set(CMAKE_CXX_FLAGS "-std=c++0x")
     set(CMAKE_EXE_LINKER_FLAGS "-lrt")
+endif ()
+
+if (APPLE)
+    #set(CMAKE_CXX_FLAGS "")
+    #set(CMAKE_EXE_LINKER_FLAGS "-lrt")
 endif ()
     
 

@@ -90,7 +90,7 @@ namespace zb {
 
 		static ZbConnectionManager *instance;
 		typedef std::set<ZbConnection::pointer> conn_set;
-		typedef std::map<string, std::set<ZbConnection::pointer>> named_set;
+		typedef std::map<string, std::set<ZbConnection::pointer> > named_set;
 		conn_set conns_;
 		named_set reusable_conns_;
 	};
