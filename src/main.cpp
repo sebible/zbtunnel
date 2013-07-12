@@ -1,18 +1,18 @@
 #include "zbtunnel.hpp"
 
 #include <iostream>
-#include <boost/property_tree/ptree.hpp>
-#include <boost/property_tree/json_parser.hpp>
 
-
-namespace ptree = boost::property_tree;
 using std::cout;
 
 int main(int argc, char **argv) {
-	cout << "ZbTunnel " << VERSION << "\n";
+	cout << DISPLAY_NAME << " " << VERSION;
+#ifdef WITH_OPENSSL
+	cout << " (compiled with openssl)";
+#endif
+	cout << "\n";
 
 	if (argc < 2) {
-		cout << "Usage:\n\tzbtunnel config_filename\n";
+		cout << "Usage:\n\t" << argv[0] << " <config_filename>\n";
 		exit(0);
 	}
 
@@ -32,20 +32,9 @@ int main(int argc, char **argv) {
 				gconf.log_level((zb::ZbConfig::log_level_type)global.get("log_level", (int)gconf.log_level()));
 				gconf.allow_reuse(global.get<bool>("log_level", gconf.allow_reuse()));
 			} else {
-				zb::chain_config_type chain_conf;
-				const ptree::ptree& chain = node.second;
-
-				BOOST_FOREACH(ptree::ptree::value_type proxy, chain) {
-					zb::config_type conf;
-					BOOST_FOREACH(ptree::ptree::value_type item, proxy.second) {
-						conf[item.first] = item.second.get_value("");
-					}
-					chain_conf.push_back(conf);
-				}
-
 				boost::shared_ptr<zb::ZbTunnel> t(new zb::ZbTunnel(node.first));
 				tunnels.insert(t);
-				t->start_with_config(chain_conf, true);
+				t->start_with_config(node.second, true);
 				tg.add_thread(t->get_worker().get());
 			}
 		}

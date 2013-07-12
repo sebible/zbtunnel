@@ -79,6 +79,7 @@ namespace zb {
 
 		void start_with_config(config_type& config, bool threaded = true) throw (string);
 		void start_with_config(chain_config_type& config, bool threaded = true) throw (string);
+		void start_with_config(const ptree::ptree& config, bool threaded = true) throw (string);
 		void wait();
 		void stop();
 		bool running();

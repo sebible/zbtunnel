@@ -4,7 +4,7 @@
 */
 
 #include "zbcoder.hpp"
-#include <openssl/md5.h>
+#include "md5.h"
 #include <boost/integer.hpp>
 
 
@@ -65,7 +65,10 @@ namespace zb {
 		uint64_t keynum[2];
 		int i = 0;
 
-		MD5((const unsigned char*)key.c_str(), key.size(), (unsigned char*)keynum);
+		MD5 md5(key);
+		md5.finalize();
+		unsigned char *tmp = md5.get_digest();
+		memcpy(keynum, tmp, 8);
 
 		for(i = 0; i < 256; ++i) {
 			table[i] = i;

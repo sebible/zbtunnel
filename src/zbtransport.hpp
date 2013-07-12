@@ -227,7 +227,7 @@ namespace zb {
 		virtual void async_connect(string host, string port, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
 			if (host.empty() || port.empty()) {
 				last_error_ = string("Bad host:port");
-				invoke_callback(boost::bind(handler, make_error_code(ERRC::bad_address)));
+				invoke_callback(boost::bind(handler, make_error_code(errc::bad_address)));
 			}
 
 			std::stringstream s;
@@ -271,7 +271,7 @@ namespace zb {
 		virtual void async_connect(string host, string port, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
 			if (host.empty() || port.empty()) {
 				last_error_ = string("Bad host:port");
-				invoke_callback(boost::bind(handler, make_error_code(ERRC::bad_address)));
+				invoke_callback(boost::bind(handler, make_error_code(errc::bad_address)));
 			}
 
 			std::stringstream s;
@@ -307,12 +307,12 @@ namespace zb {
 					string s((char*)buf, pos);
 					size_t tmp = s.find("\r\n");
 					last_error_ = s.substr(13, tmp - 13);
-					invoke_callback(boost::bind(handler, make_error_code(ERRC::permission_denied)));
+					invoke_callback(boost::bind(handler, make_error_code(errc::permission_denied)));
 				}
 			} 
 			else if (pos >= sizeof(buf)) {
 				last_error_ = "ZbHttpTransport receive buffer runs out.";
-				invoke_callback(boost::bind(handler, make_error_code(ERRC::no_buffer_space)));
+				invoke_callback(boost::bind(handler, make_error_code(errc::no_buffer_space)));
 			}
 			else {
 				async_receive(buf + pos, sizeof(buf) - pos, boost::bind(&ZbHttpTransport::_handle_http_connect, static_cast<ZbHttpTransport*>(this), _1, _2, handler));
@@ -320,7 +320,7 @@ namespace zb {
 		}
 	}; // ZbHttpTransport
 
-#ifdef WITH_HTTPS
+#ifdef WITH_OPENSSL
 	class ZbHttpsTransport: public ZbHttpTransport
 	{
 	protected:
@@ -356,7 +356,7 @@ namespace zb {
 			stream_->async_read_some(boost::asio::buffer(data, size), handler);
 		};
 	}; // ZbHttpsTransport
-#endif // WITH_HTTPS
+#endif // WITH_OPENSSL
 
 	class ZbSocks5Transport: public ZbTransport
 	{
@@ -406,12 +406,12 @@ namespace zb {
 			if (state == GREETING) {
 				if (buf[0] != 5) {
 					last_error_ = string("Client uses version 5. But server requires version ") + boost::lexical_cast<string>(buf[0]);
-					invoke_callback(boost::bind(handler, make_error_code(ERRC::protocol_not_supported)));
+					invoke_callback(boost::bind(handler, make_error_code(errc::protocol_not_supported)));
 				}
 
 				if (buf[1] == 0xff) {
 					last_error_ = string("Server doesn't support our authentication method.");
-					invoke_callback(boost::bind(handler, make_error_code(ERRC::protocol_not_supported)));
+					invoke_callback(boost::bind(handler, make_error_code(errc::protocol_not_supported)));
 				} 
 				else if (buf[1] == 2) {
 					// Auth
@@ -435,7 +435,7 @@ namespace zb {
 					invoke_callback(boost::bind(handler, error_code()));
 				} else {
 					last_error_ = string("Authentication failed.");
-					invoke_callback(boost::bind(handler, make_error_code(ERRC::permission_denied)));
+					invoke_callback(boost::bind(handler, make_error_code(errc::permission_denied)));
 				}
 			} else if (state == CONNECTING) {
 				if (buf[2] == 0) {
@@ -458,12 +458,12 @@ namespace zb {
 		virtual void async_connect(string host, string port, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
 			if (host.empty() || port.empty()) {
 				last_error_ = string("Bad host:port");
-				invoke_callback(boost::bind(handler, make_error_code(ERRC::bad_address)));
+				invoke_callback(boost::bind(handler, make_error_code(errc::bad_address)));
 			}
 
 			if (state != STANDBY) {
 				last_error_ = string("Handshake not succeeded yet.");
-				invoke_callback(boost::bind(handler, make_error_code(ERRC::operation_in_progress)));
+				invoke_callback(boost::bind(handler, make_error_code(errc::operation_in_progress)));
 			}
 
 			std::stringstream s;

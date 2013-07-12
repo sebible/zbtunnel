@@ -130,10 +130,13 @@ namespace zb {
 					out_.reset(new ZbShadowTransport(out_, conf));
 				else if (ttype.compare("http") == 0)
 					out_.reset(new ZbHttpTransport(out_, conf));
-	#ifdef WITH_HTTPS
+#ifdef WITH_OPENSSL
 				else if (ttype.compare("https") == 0)
 					out_.reset(new ZbHttpsTransport(out_, conf));
-	#endif
+#else
+				else if (ttype.compare("https") == 0)
+					THROW(string("https is only available when compiled with openssl"));
+#endif
 				else if (ttype.compare("socks5") == 0)
 					out_.reset(new ZbSocks5Transport(out_, conf));
 				else if (ttype.compare("raw") == 0) {
@@ -239,6 +242,20 @@ namespace zb {
 		chain_config_type conf;
 		conf.push_back(config);
 		start_with_config(conf, threaded);
+	}
+	
+	void ZbTunnel::start_with_config(const ptree::ptree& config, bool threaded) throw (string) {
+		zb::chain_config_type chain_conf;
+
+		BOOST_FOREACH(ptree::ptree::value_type proxy, config) {
+			zb::config_type conf;
+			BOOST_FOREACH(ptree::ptree::value_type item, proxy.second) {
+				conf[item.first] = item.second.get_value("");
+			}
+			chain_conf.push_back(conf);
+		}
+
+		start_with_config(chain_conf, threaded);
 	}
 
 	void ZbTunnel::start_with_config(zb::chain_config_type& config, bool threaded)  throw (string){

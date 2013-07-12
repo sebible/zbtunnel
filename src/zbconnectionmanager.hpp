@@ -49,7 +49,7 @@ namespace zb {
 			};
 		}
 
-		void stopAll() {
+		void stop_all() {
 			BOOST_FOREACH(std::set<ZbConnection::pointer>::value_type node, conns_) {
 				node->stop(false);
 			}
