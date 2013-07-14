@@ -24,58 +24,7 @@
 
 #pragma once
 
-#include "zbconfig.hpp"
-#include "zbconnection.hpp"
+#cmakedefine WITH_OPENSSL
+#define DISPLAY_NAME "@ZB_DISPLAY_NAME@"
+#define VERSION "@ZB_VERSION@"
 
-namespace zb {
-
-	class ZbConnectionManager
-	{
-	public:
-		typedef shared_ptr<ZbConnectionManager> pointer;
-
-		ZbConnectionManager() {};
-
-		void add(ZbConnection::pointer conn) {
-			conns_.insert(conn);
-		}
-
-		void remove(ZbConnection::pointer conn) {
-			conns_.erase(conn);
-			reusable_conns_.erase(conn);
-		}
-
-		void stop_all() {
-			BOOST_FOREACH(conn_set::value_type node, conns_) {
-				node->stop(false);
-			}
-
-			BOOST_FOREACH(conn_set::value_type node, reusable_conns_) {
-				node->stop(false);
-			};
-		}
-
-		void recycle(ZbConnection::pointer conn) {
-			reusable_conns_.insert(conn);
-			conns_.erase(conn);
-		}
-
-		ZbConnection::pointer get_or_create_conn(shared_ptr<io_service>& service, ZbConnection::client_ptr client) {
-			ZbConnection::pointer p;
-			if (reusable_conns_.size() > 0) {
-				p = *(reusable_conns_.begin());
-				reusable_conns_.erase(p);
-			} else {
-				p = ZbConnection::create(service, client);
-				conns_.insert(p);
-			}
-			return p;
-		}
-
-	protected:
-		typedef std::set<ZbConnection::pointer> conn_set;
-
-		conn_set conns_;
-		conn_set reusable_conns_;
-	};
-}

@@ -46,8 +46,8 @@ file (GLOB DLL RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
 	"[^.]*.in"
     )
 
-configure_file("zbconfig.hpp.in" "${PROJECT_BINARY_DIR}/zbconfig.hpp")
-source_group(GENERATED FILES "${PROJECT_BINARY_DIR}/zbconfig.hpp")
+configure_file("zbconfig_inc.hpp.in" "${PROJECT_BINARY_DIR}/zbconfig_inc.hpp")
+source_group(GENERATED FILES "${PROJECT_BINARY_DIR}/zbconfig_inc.hpp")
 	
 list(REMOVE_ITEM DLL "main.cpp")
 
@@ -59,7 +59,7 @@ endif ()
 
 link_directories(${Boost_LIBRARY_DIRS})
 
-add_library(zbtunnel_lib ${DLL} "${PROJECT_BINARY_DIR}/zbconfig.hpp")
+add_library(zbtunnel_lib ${DLL} "${PROJECT_BINARY_DIR}/zbconfig_inc.hpp")
 add_executable(zbtunnel "main.cpp")
 add_dependencies(zbtunnel zbtunnel_lib)
 

@@ -30,7 +30,7 @@
 
 namespace zb {
 
-	class ZbTransport
+	class ZbTransport: public boost::enable_shared_from_this<ZbTransport>
 	{
 	public:
 		typedef boost::function<void (const error_code&)> connect_handler_type;
@@ -128,9 +128,162 @@ namespace zb {
 
 
 	protected:
+		error_code no_error_;
 		string last_error_;
 		pointer parent_;
 		shared_ptr<io_service> io_service_;
+	};
+
+	/////////////////////////////////////
+	// Pseudo-async
+	class ZbStreamTransport: public ZbTransport
+	{
+	protected:
+		boost::asio::steady_timer timer_;
+		timeval tv_;
+		boost::thread *worker_;
+		bool running_;
+		unsigned long read_pos_, write_pos_, stream_type_;
+		HANDLE h_;
+		char buf_[256];
+
+	public:
+		typedef shared_ptr<ZbStreamTransport> pointer;
+
+		ZbStreamTransport(shared_ptr<io_service> service):ZbTransport(ZbTransport::pointer()),timer_(*service) {
+			io_service_ = service;
+			tv_.tv_sec = 0;
+			tv_.tv_usec = 1;
+			running_ = true;
+			read_pos_ = 0;
+			write_pos_ = 0;
+
+			h_ = ::GetStdHandle(STD_INPUT_HANDLE);
+			stream_type_ = GetFileType(h_);
+			gconf.log(gconf_type::DEBUG_STDIO, gconf_type::LOG_DEBUG, "ZbStreamTransport", string("Console handle type:") + boost::lexical_cast<string>(stream_type_));
+
+			if (stream_type_ == FILE_TYPE_CHAR && !SetConsoleMode(h_, 0))
+				gconf.log(gconf_type::DEBUG_STDIO, gconf_type::LOG_WARN, "ZbStreamTransport", string("Set console mode failed:") + boost::lexical_cast<string>(GetLastError()));
+			
+
+			worker_ = 0;
+			if (worker_ == 0) {
+				worker_ = new boost::thread(boost::bind(&ZbStreamTransport::worker, this));
+			}
+		}
+
+		~ZbStreamTransport() {
+			close();
+		}
+
+		virtual void close() {
+			timer_.cancel();
+			timer_.wait();
+			running_ = false;
+			if (h_ != INVALID_HANDLE_VALUE) CloseHandle(h_);
+			h_ = INVALID_HANDLE_VALUE;
+			if (worker_) {
+				running_ = false;
+				worker_->interrupt();
+				worker_->join();
+				worker_ = 0;
+			}
+		}
+
+		void worker() {
+			unsigned long a = 0, b = 0, c = 0, s = 0, sob = sizeof(buf_);
+
+			gconf.log(gconf_type::DEBUG_STDIO, gconf_type::LOG_DEBUG, "ZbStreamTransport", "Input worker started.");
+			
+			while (running_) {
+				// If write_pos reaches the end of buf, stop reading and wait for read_pos to catch up
+				a = write_pos_ % sob;
+				if (write_pos_ < (read_pos_ / sob + 1) * sob) {
+					s = 0;
+					if (stream_type_ == FILE_TYPE_CHAR && !ReadConsoleA(h_, buf_ + a, sob - a, &s, 0)) {
+						gconf.log(gconf_type::DEBUG_STDIO, gconf_type::LOG_WARN, "ZbStreamTransport", string("Error reading stdin:") + boost::lexical_cast<string>(GetLastError()));
+						worker_ = 0;
+						return;
+					} else if (stream_type_ == FILE_TYPE_PIPE) {
+						b = 0;
+						if (!PeekNamedPipe(h_, 0, 0, 0, &b, 0)) {
+							gconf.log(gconf_type::DEBUG_STDIO, gconf_type::LOG_WARN, "ZbStreamTransport", string("Error reading stdin pipe:") + boost::lexical_cast<string>(GetLastError()));
+							worker_ = 0;
+							return;
+						}
+						std::cout.flush();
+						if (b == 0) {
+							boost::this_thread::sleep( boost::posix_time::milliseconds(100) );
+							continue;
+						} else {
+							c = b > (sob - a) ? (sob - a) : b;
+							gconf.log(gconf_type::DEBUG_STDIO, gconf_type::LOG_DEBUG, "ZbStreamTransport", string("Peeking:") + boost::lexical_cast<string>(b) + " reading:" + boost::lexical_cast<string>(c));
+							ReadFile(h_, buf_ + a, c, &s, 0);
+						}
+					}
+
+					write_pos_ = write_pos_ + s;
+				} else {
+					boost::this_thread::sleep( boost::posix_time::milliseconds(100) );
+				}
+			}
+
+			gconf.log(gconf_type::DEBUG_STDIO, gconf_type::LOG_DEBUG, "ZbStreamTransport", "Input worker exited");
+			worker_ = 0;
+		}
+
+		virtual void async_connect(string host, string port, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
+			last_error_ = "connecting is not supported by this transport";
+			throw string(last_error_);
+		}
+
+		virtual void async_send(const data_type data,const size_t size,
+			BOOST_ASIO_MOVE_ARG(write_handler_type) handler) {
+
+			HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+			if (h == INVALID_HANDLE_VALUE) {
+				invoke_callback(boost::bind(handler, make_error_code(errc::bad_file_descriptor), 0));
+				return;
+			}
+
+			DWORD d;
+			if (WriteFile(h, data, size, &d, 0))
+				invoke_callback(boost::bind(handler, no_error_, size));
+			else {
+				last_error_ = string("Error code:") + boost::lexical_cast<string>(GetLastError());
+				invoke_callback(boost::bind(handler, make_error_code(errc::broken_pipe), 0));
+			}
+		}
+
+		virtual void async_receive(const data_type& data, const size_t& size,
+			BOOST_ASIO_MOVE_ARG(read_handler_type) handler) {
+
+			if (worker_ == 0) {
+				invoke_callback(boost::bind(handler, make_error_code(errc::broken_pipe), 0));
+				return;
+			}
+			
+			unsigned long s = write_pos_ - read_pos_;
+			if (s > 0) {
+				memcpy(data, buf_ + (read_pos_ % sizeof(buf_)), s);
+				read_pos_ = read_pos_ + s;
+				gconf.log(gconf_type::DEBUG_STDIO, gconf_type::LOG_DEBUG, "ZbStreamTransport", string("Read ") + boost::lexical_cast<string>(s) + " bytes:" + string((char*)data, s));
+				invoke_callback(boost::bind(handler, no_error_, s));
+				return;
+			}
+
+			timer_.expires_from_now(chrono::microseconds(100));
+			timer_.async_wait(boost::bind(&ZbStreamTransport::_handle_timer, boost::static_pointer_cast<ZbStreamTransport>(shared_from_this()), _1, data, size, handler));
+		}
+
+		void _handle_timer(const error_code& error, const data_type& data, const size_t& size,
+			BOOST_ASIO_MOVE_ARG(read_handler_type) handler) {
+			if (error) {
+				return;
+			}
+
+			async_receive(data, size, handler);
+		}
 	};
 
 	/////////////////////////////////////
@@ -173,7 +326,7 @@ namespace zb {
 
 
 			gconf.log(gconf_type::DEBUG_SOCKS, gconf_type::LOG_DEBUG, "ZbSocketTransport", string("Resolving ") + host + ":" + port);
-			resolver_->async_resolve(socks_query, boost::bind(&ZbSocketTransport::_handle_resolve, this, _1, _2, handler));
+			resolver_->async_resolve(socks_query, boost::bind(&ZbSocketTransport::_handle_resolve, boost::static_pointer_cast<ZbSocketTransport>(shared_from_this()), _1, _2, handler));
 		};
 
 		void _handle_resolve(const error_code& error, tcp::resolver::iterator iterator, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
@@ -204,8 +357,9 @@ namespace zb {
 		{
 			socket_->async_read_some(boost::asio::buffer(data, size), handler);
 		};
-	};
+	}; // ZbSocketTransport
 
+	///////////////////////////////////////////
 	class ZbShadowTransport: public ZbTransport
 	{
 	protected:
@@ -236,7 +390,7 @@ namespace zb {
 			s << "\x03"  << (char)host.size() << host <<  h << l;
 			string s2 = s.str();
 			memcpy(buf, s2.data(), s2.size() < sizeof(buf) ? s2.size() : sizeof(buf));
-			async_send((const data_type)(buf), s2.size(), boost::bind(&ZbTransport::_dummy_write_handler, this, _1, _2));
+			async_send((const data_type)(buf), s2.size(), boost::bind(&ZbTransport::_dummy_write_handler, boost::static_pointer_cast<ZbShadowTransport>(shared_from_this()), _1, _2));
 
 			invoke_callback(boost::bind(handler, error_code()));
 		};
@@ -254,6 +408,7 @@ namespace zb {
 		};
 	}; // ZbShadowTransport
 
+	//////////////////////////////////////////
 	class ZbHttpTransport: public ZbTransport
 	{
 	protected:
@@ -276,7 +431,7 @@ namespace zb {
 
 			std::stringstream s;
 			s << "CONNECT " << host << ":" << port << " HTTP/1.1\r\n";
-			//s << "Host: " << host << ":" << port << "\r\n";
+			s << "Host: " << host << ":" << port << "\r\n";
 			s << "User-Agent: " << UA_STRING << "\r\n";
 			if (!username.empty()) {
 				string tmp = username + ":" + password;
@@ -285,8 +440,8 @@ namespace zb {
 			s << "\r\n";
 			connect_string = s.str();
 			gconf.log(gconf_type::DEBUG_HTTP, gconf_type::LOG_DEBUG, "ZbHttpTransport", string("connecting\n") + connect_string);
-			async_send((const data_type)(connect_string.c_str()), connect_string.size(), boost::bind(&ZbTransport::_dummy_write_handler, this, _1, _2));
-			async_receive(buf, sizeof(buf), boost::bind(&ZbHttpTransport::_handle_http_connect, static_cast<ZbHttpTransport*>(this), _1, _2, handler));
+			async_send((const data_type)(connect_string.c_str()), connect_string.size(), boost::bind(&ZbTransport::_dummy_write_handler, boost::static_pointer_cast<ZbHttpTransport>(shared_from_this()), _1, _2));
+			async_receive(buf, sizeof(buf), boost::bind(&ZbHttpTransport::_handle_http_connect, boost::static_pointer_cast<ZbHttpTransport>(shared_from_this()), _1, _2, handler));
 		};
 
 		void _handle_http_connect(const error_code& error, const size_t size, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
@@ -315,7 +470,7 @@ namespace zb {
 				invoke_callback(boost::bind(handler, make_error_code(errc::no_buffer_space)));
 			}
 			else {
-				async_receive(buf + pos, sizeof(buf) - pos, boost::bind(&ZbHttpTransport::_handle_http_connect, static_cast<ZbHttpTransport*>(this), _1, _2, handler));
+				async_receive(buf + pos, sizeof(buf) - pos, boost::bind(&ZbHttpTransport::_handle_http_connect, boost::static_pointer_cast<ZbHttpTransport>(shared_from_this()), _1, _2, handler));
 			}
 		}
 	}; // ZbHttpTransport
@@ -358,6 +513,7 @@ namespace zb {
 	}; // ZbHttpsTransport
 #endif // WITH_OPENSSL
 
+	////////////////////////////////////////
 	class ZbSocks5Transport: public ZbTransport
 	{
 	protected:
@@ -384,9 +540,9 @@ namespace zb {
 				l = 4;
 			}
 			state = GREETING;
-			async_send(req, l, boost::bind(&ZbTransport::_dummy_write_handler, this, _1, _2));
+			async_send(req, l, boost::bind(&ZbTransport::_dummy_write_handler, boost::static_pointer_cast<ZbSocks5Transport>(shared_from_this()), _1, _2));
 			pos = 0;
-			async_receive(buf, sizeof(buf), boost::bind(&ZbSocks5Transport::_handle_socks, static_cast<ZbSocks5Transport*>(this), _1, _2, 2, handler));
+			async_receive(buf, sizeof(buf), boost::bind(&ZbSocks5Transport::_handle_socks, boost::static_pointer_cast<ZbSocks5Transport>(shared_from_this()), _1, _2, 2, handler));
 		}
 
 		void _handle_socks(const error_code& error, const size_t size, const size_t target_size, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
@@ -399,7 +555,7 @@ namespace zb {
 			pos += size;
 			if (pos < target_size) {
 				// Not enough bytes
-				async_receive(buf + pos, sizeof(buf) - pos, boost::bind(&ZbSocks5Transport::_handle_socks, static_cast<ZbSocks5Transport*>(this), _1, _2, target_size, handler));
+				async_receive(buf + pos, sizeof(buf) - pos, boost::bind(&ZbSocks5Transport::_handle_socks, boost::static_pointer_cast<ZbSocks5Transport>(shared_from_this()), _1, _2, target_size, handler));
 				return;
 			}
 
@@ -420,9 +576,9 @@ namespace zb {
 					s << "\x01" << (char)username.size() << username << (char)password.size() << password;
 					string t = s.str();
 					memcpy(req, t.c_str(), t.size());
-					async_send(req, t.size(), boost::bind(&ZbTransport::_dummy_write_handler, this, _1, _2));
+					async_send(req, t.size(), boost::bind(&ZbTransport::_dummy_write_handler, boost::static_pointer_cast<ZbSocks5Transport>(shared_from_this()), _1, _2));
 					pos = 0;
-					async_receive(buf, sizeof(buf), boost::bind(&ZbSocks5Transport::_handle_socks, static_cast<ZbSocks5Transport*>(this), _1, _2, 2, handler));
+					async_receive(buf, sizeof(buf), boost::bind(&ZbSocks5Transport::_handle_socks, boost::static_pointer_cast<ZbSocks5Transport>(shared_from_this()), _1, _2, 2, handler));
 				} else {
 					// Done
 					state = STANDBY;
@@ -445,7 +601,7 @@ namespace zb {
 					if (buf[4] == 4) tsize += 16 + 2;
 					if (buf[4] == 3) tsize += 1 + buf[5] + 2;
 					if (pos < tsize) {
-						async_receive(buf + pos, sizeof(buf) - pos, boost::bind(&ZbSocks5Transport::_handle_socks, static_cast<ZbSocks5Transport*>(this), _1, _2, tsize, handler));
+						async_receive(buf + pos, sizeof(buf) - pos, boost::bind(&ZbSocks5Transport::_handle_socks, boost::static_pointer_cast<ZbSocks5Transport>(shared_from_this()), _1, _2, tsize, handler));
 					}
 
 					// Connected
@@ -475,10 +631,10 @@ namespace zb {
 			memcpy(req + 4, tmp.c_str(), tmp.size());
 
 			state = CONNECTING;
-			async_send((const data_type)req, tmp.size() + 4, boost::bind(&ZbTransport::_dummy_write_handler, this, _1, _2));
+			async_send((const data_type)req, tmp.size() + 4, boost::bind(&ZbTransport::_dummy_write_handler, boost::static_pointer_cast<ZbSocks5Transport>(shared_from_this()), _1, _2));
 			// target to receive at least 6 bytes which will at least include the starting of address
 			pos = 0;
-			async_receive(buf, sizeof(buf), boost::bind(&ZbSocks5Transport::_handle_socks, static_cast<ZbSocks5Transport*>(this), _1, _2, 6, handler));
+			async_receive(buf, sizeof(buf), boost::bind(&ZbSocks5Transport::_handle_socks, boost::static_pointer_cast<ZbSocks5Transport>(shared_from_this()), _1, _2, 6, handler));
 		}
-	};
+	}; // ZbSocks5Transport
 }

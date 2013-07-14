@@ -24,13 +24,13 @@
 
 #pragma once
 
-#cmakedefine WITH_OPENSSL
-#define DISPLAY_NAME "@ZB_DISPLAY_NAME@"
-#define VERSION "@ZB_VERSION@"
+#include "zbconfig_inc.hpp"
 
 #define UA_STRING DISPLAY_NAME"/"VERSION
 
 #include <boost/asio.hpp>
+#include <boost/asio/steady_timer.hpp>
+#include <boost/chrono.hpp>
 #ifdef WITH_OPENSSL
 #include <boost/asio/ssl.hpp>
 #endif
@@ -44,6 +44,12 @@
 #include <boost/foreach.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
+
+#ifdef WIN32
+#include <windows.h>
+#include <io.h>
+#endif
+
 #include <string>
 #include <stdint.h>
 #include <iostream>
@@ -59,6 +65,7 @@ using boost::system::error_code;
 using boost::system::make_error_code;
 namespace errc = boost::system::errc;
 namespace ptree = boost::property_tree;
+namespace chrono = boost::chrono;
 using boost::shared_ptr;
 using boost::scoped_ptr;
 using boost::weak_ptr;
@@ -82,6 +89,7 @@ namespace zb {
 			DEBUG_HTTP=16,
 			DEBUG_SOCKS=32,
 			DEBUG_CODER=64,
+			DEBUG_STDIO=128,
 			DEBUG_ALL=0xff
 		};
 
@@ -100,10 +108,10 @@ namespace zb {
 		void allow_reuse(bool b) {allow_reuse_ = b;}
 		bool allow_reuse() {return allow_reuse_;}
 
+		void output(std::ostream* out){out_ = out;}
+
 		void log(int f, log_level_type l, string module, string msg) {log_(f, l, module, msg);}
-
-		//static void log(uint8_t f, log_level_type l, string module, string msg) {ZbConfig::get()->log(f, l, module, msg);}
-
+		
 		static ZbConfig *get() {
 			if (!ZbConfig::instance_)
 				ZbConfig::instance_ = new ZbConfig();
@@ -111,6 +119,7 @@ namespace zb {
 		}
 
 	protected:
+		std::ostream* out_;
 		int log_filter_;
 		bool allow_reuse_;
 		log_level_type log_level_;
@@ -118,6 +127,7 @@ namespace zb {
 		static ZbConfig *instance_;
 
 		ZbConfig() {
+			out_ = &std::cout;
 			log_level_ = LOG_WARN;
 			log_filter_ = DEBUG_TUNNEL | DEBUG_CONNECTION;
 			allow_reuse_ = 1;
@@ -128,7 +138,7 @@ namespace zb {
 			if (level < log_level_) return;
 			if (level < LOG_WARN && (filter & log_filter_) == 0) return;
 			static char* str[3] = {"DEBUG", "WARN", "NONE"};
-			std::cout << module + "[" + str[level] + "]: " + msg + "\n";
+			if (out_) *out_ << module + "[" + str[level] + "]: " + msg + "\n";
 		};
 	};
 

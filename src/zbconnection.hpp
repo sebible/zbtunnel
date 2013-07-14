@@ -25,57 +25,42 @@
 #pragma once
 
 #include "zbconfig.hpp"
-#include "zbconnection.hpp"
+#include "zbtransport.hpp"
 
 namespace zb {
 
-	class ZbConnectionManager
+	class ZbTunnel;
+	class ZbConnectionManager;
+
+	class ZbConnection
+	  : public boost::enable_shared_from_this<ZbConnection>
 	{
+		friend class ZbConnectionManager;
 	public:
-		typedef shared_ptr<ZbConnectionManager> pointer;
+		enum {BUFSIZE = 8192};
+		typedef shared_ptr<ZbConnection> pointer;
+		typedef weak_ptr<ZbTunnel> client_ptr;
+		typedef uint8_t buf_type[2][BUFSIZE]; // 0 for read, 1 for write
+		
+		static pointer create(shared_ptr<io_service>& io_service, client_ptr client);
 
-		ZbConnectionManager() {};
+		string to_string();
+		void start(const ZbTransport::pointer& in);
+		void stop(bool reusable);
 
-		void add(ZbConnection::pointer conn) {
-			conns_.insert(conn);
-		}
+	private:
+		ZbConnection();
+		void handle_connect(const error_code& error);
+		void handle_init(const error_code& error);
+		void handle_transfer(const error_code& error, size_t size, int direction);
+		void handle_write(const error_code& error, size_t bytes_transferred, int direction);
+		string _state_throw(string msg);
 
-		void remove(ZbConnection::pointer conn) {
-			conns_.erase(conn);
-			reusable_conns_.erase(conn);
-		}
-
-		void stop_all() {
-			BOOST_FOREACH(conn_set::value_type node, conns_) {
-				node->stop(false);
-			}
-
-			BOOST_FOREACH(conn_set::value_type node, reusable_conns_) {
-				node->stop(false);
-			};
-		}
-
-		void recycle(ZbConnection::pointer conn) {
-			reusable_conns_.insert(conn);
-			conns_.erase(conn);
-		}
-
-		ZbConnection::pointer get_or_create_conn(shared_ptr<io_service>& service, ZbConnection::client_ptr client) {
-			ZbConnection::pointer p;
-			if (reusable_conns_.size() > 0) {
-				p = *(reusable_conns_.begin());
-				reusable_conns_.erase(p);
-			} else {
-				p = ZbConnection::create(service, client);
-				conns_.insert(p);
-			}
-			return p;
-		}
-
-	protected:
-		typedef std::set<ZbConnection::pointer> conn_set;
-
-		conn_set conns_;
-		conn_set reusable_conns_;
+		int current_;
+		buf_type buf_[2]; // two directions
+		client_ptr client_;
+		ZbTransport::pointer in_, out_;
+		enum {INIT, CONNECTED, BAD} state_;
 	};
+
 }
