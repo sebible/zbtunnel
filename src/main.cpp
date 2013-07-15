@@ -9,7 +9,7 @@ string banner() {
 #endif
 #ifndef WIN32
 #ifndef DISABLE_EPOLL
-        " epoll"
+    " epoll"
 #endif
 #endif
 	"\n");

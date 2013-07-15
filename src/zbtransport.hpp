@@ -142,24 +142,24 @@ namespace zb {
 	{
 	protected:
 		boost::asio::steady_timer timer_;
-		timeval tv_;
-		boost::thread *worker_;
-		unsigned long stream_type_;
-		HANDLE h_;
+		//boost::asio::windows::stream_handle in_, out_;
+		unsigned long in_type_, out_type_;
+		HANDLE hin_, hout_;
 
 	public:
 		typedef shared_ptr<ZbStreamTransport> pointer;
 
 		ZbStreamTransport(shared_ptr<io_service> service):ZbTransport(ZbTransport::pointer()),timer_(*service) {
 			io_service_ = service;
-			tv_.tv_sec = 0;
-			tv_.tv_usec = 1;
 
-			h_ = ::GetStdHandle(STD_INPUT_HANDLE);
-			stream_type_ = GetFileType(h_);
-			gconf.log(gconf_type::DEBUG_STDIO, gconf_type::LOG_DEBUG, "ZbStreamTransport", string("Console handle type:") + boost::lexical_cast<string>(stream_type_));
+			hin_ = ::GetStdHandle(STD_INPUT_HANDLE);
+			hout_ = ::GetStdHandle(STD_OUTPUT_HANDLE);
+			in_type_ = GetFileType(hin_);
+			out_type_ = GetFileType(hout_);
+			gconf.log(gconf_type::DEBUG_STDIO, gconf_type::LOG_DEBUG, "ZbStreamTransport", string("stdin type:") + boost::lexical_cast<string>(in_type_) +
+				string(" stdout type:") + boost::lexical_cast<string>(out_type_));
 
-			if (stream_type_ == FILE_TYPE_CHAR && !SetConsoleMode(h_, 0))
+			if (in_type_ == FILE_TYPE_CHAR && !SetConsoleMode(hin_, 0))
 				gconf.log(gconf_type::DEBUG_STDIO, gconf_type::LOG_WARN, "ZbStreamTransport", string("Set console mode failed:") + boost::lexical_cast<string>(GetLastError()));
 		}
 
@@ -170,8 +170,9 @@ namespace zb {
 		virtual void close() {
 			timer_.cancel();
 			timer_.wait();
-			if (h_ != INVALID_HANDLE_VALUE) CloseHandle(h_);
-			h_ = INVALID_HANDLE_VALUE;
+			if (hin_ != INVALID_HANDLE_VALUE) CloseHandle(hin_);
+			if (hout_ != INVALID_HANDLE_VALUE) CloseHandle(hout_);
+			hout_ = hin_ = INVALID_HANDLE_VALUE;
 		}
 
 		virtual void async_connect(string host, string port, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
@@ -182,14 +183,8 @@ namespace zb {
 		virtual void async_send(const data_type data,const size_t size,
 			BOOST_ASIO_MOVE_ARG(write_handler_type) handler) {
 
-			HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
-			if (h == INVALID_HANDLE_VALUE) {
-				invoke_callback(boost::bind(handler, make_error_code(errc::bad_file_descriptor), 0));
-				return;
-			}
-
 			DWORD d;
-			if (WriteFile(h, data, size, &d, 0))
+			if (WriteFile(hout_, data, size, &d, 0))
 				invoke_callback(boost::bind(handler, no_error_, size));
 			else {
 				last_error_ = string("Error code:") + boost::lexical_cast<string>(GetLastError());
@@ -199,26 +194,25 @@ namespace zb {
 
 		virtual void async_receive(const data_type& data, const size_t& size,
 			BOOST_ASIO_MOVE_ARG(read_handler_type) handler) {
-			std::cout.flush();
 			unsigned long s = 0;
 
-			if (stream_type_ == FILE_TYPE_PIPE) {
-				if (!PeekNamedPipe(h_, 0, 0, 0, &s, 0)) {
-					gconf.log(gconf_type::DEBUG_STDIO, gconf_type::LOG_WARN, "ZbStreamTransport", string("Error reading stdin pipe:") + boost::lexical_cast<string>(GetLastError()));
-					invoke_callback(boost::bind(handler, make_error_code(errc::broken_pipe), 0));
-					return;
-				}
-			} else if (stream_type_ == FILE_TYPE_CHAR) {
+			std::cout.flush();
+			if (in_type_ == FILE_TYPE_CHAR) {
 				if (int c = kbhit()) {
 					data[0] = c;
 					s = 1;
 				}
-			} else if (stream_type_ == FILE_TYPE_DISK) {
-				s = GetFileSize(h_, 0) - SetFilePointer(h_, 0, 0, FILE_CURRENT);
+			} else if (in_type_ == FILE_TYPE_DISK) {
+				s = GetFileSize(hin_, 0) - SetFilePointer(hin_, 0, 0, FILE_CURRENT);
+			} else if (in_type_ == FILE_TYPE_PIPE) {
+				if (!PeekNamedPipe(hin_, 0, 0, 0, &s, 0)) {
+					invoke_callback(boost::bind(handler, make_error_code(errc::broken_pipe), 0));
+					return;
+				}
 			}
 
 			if (s > 0) {
-				ReadFile(h_, data, s > size ? size : s, &s, 0);
+				ReadFile(hin_, data, s > size ? size : s, &s, 0);
 				gconf.log(gconf_type::DEBUG_STDIO, gconf_type::LOG_DEBUG, "ZbStreamTransport", string("Read ") + boost::lexical_cast<string>(s) + " bytes:" + string((char*)data, s));
 				invoke_callback(boost::bind(handler, no_error_, s));
 				return;
@@ -240,24 +234,23 @@ namespace zb {
 #else // Posix down here
 	class ZbStreamTransport: public ZbTransport {
 	protected:
-                boost::asio::posix::stream_descriptor in_, out_;
+        boost::asio::posix::stream_descriptor in_, out_;
 
 	public:
 		typedef shared_ptr<ZbStreamTransport> pointer;
 
 		ZbStreamTransport(shared_ptr<io_service> service):ZbTransport(ZbTransport::pointer()),in_(*service),out_(*service) {
 			io_service_ = service;
-#ifndef WIN32
+
 #ifndef DISABLE_EPOLL
-                        struct stat s;
-                        fstat(STDIN_FILENO, &s);
-                        if (S_ISREG(s.st_mode) || S_ISDIR(s.st_mode)) {
-                            throw string("Not supported input type with epoll");
-                        }
+            struct stat s;
+            fstat(STDIN_FILENO, &s);
+            if (S_ISREG(s.st_mode) || S_ISDIR(s.st_mode)) {
+                throw string("Not supported input type with epoll");
+            }
 #endif
-                        in_.assign(::dup(STDIN_FILENO));
-                        out_.assign(::dup(STDOUT_FILENO));
-#endif
+            in_.assign(::dup(STDIN_FILENO));
+            out_.assign(::dup(STDOUT_FILENO));
 		}
 
 		~ZbStreamTransport() {
@@ -275,7 +268,7 @@ namespace zb {
 		virtual void async_send(const data_type data,const size_t size,
 			BOOST_ASIO_MOVE_ARG(write_handler_type) handler) {
 
-                        boost::asio::async_write(out_, boost::asio::buffer(data, size), handler);
+            boost::asio::async_write(out_, boost::asio::buffer(data, size), handler);
 		}
 
 		virtual void async_receive(const data_type& data, const size_t& size,
