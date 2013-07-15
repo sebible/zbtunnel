@@ -47,7 +47,7 @@
 
 #ifdef WIN32
 #include <windows.h>
-#include <io.h>
+#include <conio.h>
 #endif
 
 #include <string>
