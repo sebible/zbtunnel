@@ -32,11 +32,8 @@
 #define BOOST_ASIO_DISABLE_EPOLL
 #endif
 
-#if defined(__CYGWIN__) 
+#if defined(__CYGWIN__) || defined(WIN32)
 #  define _WIN32_WINNT 0x0501 
-#  define __USE_W32_SOCKETS 
-#  undef BOOST_POSIX_API 
-#  define BOOST_WINDOWS_API 
 #endif 
 
 #include <boost/asio.hpp>
@@ -86,6 +83,8 @@ using std::vector;
 using std::map;
 using std::string;
 
+#define ZB_GETTER_SETTER(name, type) void name(type v) {name##_ = v;}; type name() {return name##_;}
+
 namespace zb {
 
 	typedef shared_ptr<tcp::socket> socket_ptr;
@@ -103,27 +102,26 @@ namespace zb {
 			DEBUG_SOCKS=32,
 			DEBUG_CODER=64,
 			DEBUG_STDIO=128,
+			DEBUG_CONNECTION_MANAGER=256,
 			DEBUG_ALL=0xff
 		};
 
 		enum log_level_type {
 			LOG_DEBUG=0,
-			LOG_WARN=1,
-			LOG_NONE=2,
+			LOG_INFO=1,
+			LOG_WARN=2,
+			LOG_NONE=3,
 		};
 
-		void log_filter(uint8_t i) {log_filter_ = i;}
-		int log_filter() {return log_filter_;}
-
-		void log_level(log_level_type i) {log_level_ = i;}
-		log_level_type log_level() {return log_level_;}
-
-		void allow_reuse(bool b) {allow_reuse_ = b;}
-		bool allow_reuse() {return allow_reuse_;}
-
-		void output(std::ostream* out){out_ = out;}
-
-		void log(int f, log_level_type l, string module, string msg) {log_(f, l, module, msg);}
+		ZB_GETTER_SETTER(log_filter, unsigned int);
+		ZB_GETTER_SETTER(log_level, log_level_type);
+		ZB_GETTER_SETTER(allow_reuse, bool);
+		ZB_GETTER_SETTER(preconnect, unsigned int);
+		ZB_GETTER_SETTER(max_reuse, unsigned int);
+		ZB_GETTER_SETTER(out, std::ostream*);
+		
+		void log(unsigned int f, log_level_type l, string module, string msg) {log_(f, l, module, msg);}
+		void flush() {if (out_) out_->flush();}
 		
 		static ZbConfig *get() {
 			if (!ZbConfig::instance_)
@@ -133,24 +131,26 @@ namespace zb {
 
 	protected:
 		std::ostream* out_;
-		int log_filter_;
+		unsigned int log_filter_, preconnect_, max_reuse_;
 		bool allow_reuse_;
 		log_level_type log_level_;
-		boost::function<void (int, log_level_type, string, string)> log_;
+		boost::function<void (unsigned int, log_level_type, string, string)> log_;
 		static ZbConfig *instance_;
 
 		ZbConfig() {
 			out_ = &std::cout;
-			log_level_ = LOG_WARN;
-			log_filter_ = DEBUG_TUNNEL | DEBUG_CONNECTION;
+			log_level_ = LOG_INFO;
+			log_filter_ = DEBUG_TUNNEL | DEBUG_CONNECTION | DEBUG_CONNECTION_MANAGER;
 			allow_reuse_ = 1;
+			preconnect_ = 0;
+			max_reuse_ = 5;
 			log_ = boost::bind(&ZbConfig::_dummy_log, this, _1, _2, _3, _4);
 		}
 
-		void _dummy_log(int filter, log_level_type level, string& module, string& msg) {
+		void _dummy_log(unsigned int filter, log_level_type level, string& module, string& msg) {
 			if (level < log_level_) return;
 			if (level < LOG_WARN && (filter & log_filter_) == 0) return;
-			static const char* str[3] = {"DEBUG", "WARN", "NONE"};
+			static const char* str[4] = {"DEBUG", "INFO", "WARN", "NONE"};
 			if (out_) *out_ << module + "[" + str[level] + "]: " + msg + "\n";
 		};
 	};

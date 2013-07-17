@@ -44,33 +44,37 @@ namespace zb {
 		void start_with_config(config_type& config) throw (string);
 		void start_with_config(const ptree::ptree& confige) throw (string);
 
+		void start() {running_=true; _start();};
+		void stop();
 		virtual void start_with_config(chain_config_type& config) throw (string) {throw string("not implemented");};
-		virtual void start() {throw string("not implemented");};
-		virtual void stop();
+		virtual void _start() {throw string("not implemented");};
+		virtual void _stop() {throw string("not implemented");};
 
 		void wait();
-		bool running();
-
 		void start_worker();
 
 		string last_error() {return last_error_;};
 		shared_ptr<boost::thread> get_worker() {return worker_;};
-		string name() {return name_;};
 
 		boost::function<void ()> get_worker_func() {
 			return boost::bind(&ZbTunnel::worker, shared_from_this());
 		};
 
+		ZB_GETTER_SETTER(running, bool);
+		ZB_GETTER_SETTER(name, string);
+
 	protected:
-		virtual void init();
+		void init();
+		virtual void _init() {throw string("not implmented");};
+
 		void worker();
 		void init_coders();
-
+		
 		string last_error_;
 		string name_;
 
+		bool running_;
 		chain_config_type config_;
-
 		ZbConnectionManager::pointer manager_;
 		shared_ptr<boost::thread> worker_;
 		shared_ptr<io_service> io_service_;
@@ -89,11 +93,11 @@ namespace zb {
 		int local_port() {return local_port_;};
 
 		virtual void start_with_config(chain_config_type& config) throw (string);
-		virtual void start();
-		virtual void stop();
+		virtual void _start();
+		virtual void _stop();
 
 	protected:
-		virtual void init();
+		virtual void _init();
 		void start_accept();
 		void handle_accept(ZbSocketTransport::pointer& in,  const error_code& error);
 
@@ -114,10 +118,10 @@ namespace zb {
 		ZbIoTunnel(string name, shared_ptr<io_service>& io_service);
 
 		virtual void start_with_config(chain_config_type& config) throw (string);
-		virtual void start();
-		virtual void stop();
+		virtual void _start();
+		virtual void _stop();
 
 	protected:
-		virtual void init();
+		virtual void _init();
 	};
 }

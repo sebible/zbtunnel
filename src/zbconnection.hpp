@@ -45,8 +45,11 @@ namespace zb {
 		static pointer create(shared_ptr<io_service>& io_service, client_ptr client);
 
 		string to_string();
-		void start(const ZbTransport::pointer& in);
-		void stop(bool reusable);
+		void start(ZbTransport::pointer in = ZbTransport::pointer());
+		void stop(bool reusable, bool remove = true);
+
+		ZB_GETTER_SETTER(id, int);
+		ZB_GETTER_SETTER(owner, string);
 
 	private:
 		ZbConnection();
@@ -56,11 +59,12 @@ namespace zb {
 		void handle_write(const error_code& error, size_t bytes_transferred, int direction);
 		string _state_throw(string msg);
 
-		int current_;
+		int current_, id_;
+		string owner_;
 		buf_type buf_[2]; // two directions
 		client_ptr client_;
 		ZbTransport::pointer in_, out_;
-		enum {INIT, CONNECTED, BAD} state_;
+		enum {INIT, CONNECTING, CONNECTED, BAD} state_;
 	};
 
 }

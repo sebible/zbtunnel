@@ -116,7 +116,8 @@ namespace zb {
 		void _read_handler(const error_code& error, const size_t size, const data_type data, 
 			BOOST_ASIO_MOVE_ARG(read_handler_type) handler)
 		{
-			handle_read_data(data, size);
+			if (!error)
+				handle_read_data(data, size);
 			invoke_callback(boost::bind(handler, error, size));		
 		}
 
@@ -323,6 +324,10 @@ namespace zb {
 			resolver_->async_resolve(socks_query, boost::bind(&ZbSocketTransport::_handle_resolve, boost::static_pointer_cast<ZbSocketTransport>(shared_from_this()), _1, _2, handler));
 		};
 
+		virtual void async_connect(const tcp::endpoint& endpoint, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
+			socket_->async_connect(endpoint, boost::bind(&ZbSocketTransport::_handle_connected, boost::static_pointer_cast<ZbSocketTransport>(shared_from_this()), _1, handler));
+		}
+
 		void _handle_resolve(const error_code& error, tcp::resolver::iterator iterator, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
 			if (error) {
 				last_error_ = error.message();
@@ -332,11 +337,15 @@ namespace zb {
 
 			gconf.log(gconf_type::DEBUG_SOCKS, gconf_type::LOG_DEBUG, "ZbSocketTransport", "Resolved");
 			assert(socket_.get() != 0);
-			boost::asio::async_connect(*socket_, iterator, boost::bind(handler, _1));
+			boost::asio::async_connect(*socket_, iterator, boost::bind(&ZbSocketTransport::_handle_connected, boost::static_pointer_cast<ZbSocketTransport>(shared_from_this()), _1, handler));
 		}
 
-		virtual void async_connect(const tcp::endpoint& endpoint, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
-			socket_->async_connect(endpoint, handler);
+		void _handle_connected(const error_code& error, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
+			/*if (!error) {
+				socket_->set_option(tcp::no_delay(true));
+				socket_->set_option(boost::asio::socket_base::keep_alive(true));
+			}*/
+			invoke_callback(boost::bind(handler, error));
 		}
 
 		virtual void async_send(const data_type data,const size_t size,

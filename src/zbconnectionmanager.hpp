@@ -29,45 +29,83 @@
 
 namespace zb {
 
+	class ZbTunnel;
+
 	class ZbConnectionManager
 	{
 	public:
 		typedef shared_ptr<ZbConnectionManager> pointer;
 
-		ZbConnectionManager() {};
+		ZbConnectionManager(string name_prefix, int preconnect = 0, int max_reuse = 5) {
+			name_ = name_prefix;
+			max_reuse_ = max_reuse;
+			preconnect_ = preconnect;
+			id_ = 0;
+		};
+
+		ZB_GETTER_SETTER(max_reuse, int);
+		ZB_GETTER_SETTER(preconnect, int);
 
 		void add(ZbConnection::pointer conn) {
 			conns_.insert(conn);
+			gconf.log(gconf_type::DEBUG_CONNECTION_MANAGER, gconf_type::LOG_DEBUG, "ZbConnectionManager", conn->to_string() + string(" added."));
 		}
 
 		void remove(ZbConnection::pointer conn) {
 			conns_.erase(conn);
 			reusable_conns_.erase(conn);
+			gconf.log(gconf_type::DEBUG_CONNECTION_MANAGER, gconf_type::LOG_DEBUG, "ZbConnectionManager", conn->to_string() + string(" removed."));
 		}
 
 		void stop_all() {
-			BOOST_FOREACH(conn_set::value_type node, conns_) {
-				node->stop(false);
+			gconf.log(gconf_type::DEBUG_CONNECTION_MANAGER, gconf_type::LOG_INFO, "ZbConnectionManager", string("Force stop all connections"));
+
+			ZbConnection::pointer p;
+			while (conns_.size()) {
+				p = (*conns_.begin());
+				if (p.get() != 0) p->stop(false, false);
+				conns_.erase(p);
 			}
 
-			BOOST_FOREACH(conn_set::value_type node, reusable_conns_) {
-				node->stop(false);
-			};
+			while (reusable_conns_.size()){
+				p = (*reusable_conns_.begin());
+				if (p.get() != 0) p->stop(false, false);
+				reusable_conns_.erase(p);
+			}
 		}
 
-		void recycle(ZbConnection::pointer conn) {
+		bool recycle(ZbConnection::pointer conn) {
+			if (reusable_conns_.size() >= max_reuse_) {
+				gconf.log(gconf_type::DEBUG_CONNECTION_MANAGER, gconf_type::LOG_INFO, "ZbConnectionManager", conn->to_string() + string(" recycled failed. max_reuse is reached."));
+				return false;
+			}
+
 			reusable_conns_.insert(conn);
 			conns_.erase(conn);
+			return true;
 		}
 
 		ZbConnection::pointer get_or_create_conn(shared_ptr<io_service>& service, ZbConnection::client_ptr client) {
-			ZbConnection::pointer p;
+			ZbConnection::pointer p, q;
 			if (reusable_conns_.size() > 0) {
 				p = *(reusable_conns_.begin());
 				reusable_conns_.erase(p);
+				conns_.insert(p);
 			} else {
 				p = ZbConnection::create(service, client);
+				p->id(id_++);
+				p->owner(name_);
 				conns_.insert(p);
+
+				int i = preconnect_;
+				while (i-- > 0 && reusable_conns_.size() < max_reuse_) {
+					q = ZbConnection::create(service, client);
+					q->id(id_++);
+					q->owner(name_);
+					q->start();
+					reusable_conns_.insert(q);
+					gconf.log(gconf_type::DEBUG_CONNECTION_MANAGER, gconf_type::LOG_DEBUG, "ZbConnectionManager", q->to_string() + string(" is created for preconnecting."));
+				}
 			}
 			return p;
 		}
@@ -75,6 +113,8 @@ namespace zb {
 	protected:
 		typedef std::set<ZbConnection::pointer> conn_set;
 
+		string name_;
+		unsigned int preconnect_, max_reuse_, id_;
 		conn_set conns_;
 		conn_set reusable_conns_;
 	};

@@ -3,12 +3,12 @@
 
 namespace zb {
 
-	ZbTunnel::ZbTunnel(string name):name_(name)
+	ZbTunnel::ZbTunnel(string name):name_(name), running_(false)
 	{
 		io_service_.reset(new io_service());
 	}
 
-	ZbTunnel::ZbTunnel(string name, boost::shared_ptr<io_service>& io_service):name_(name)
+	ZbTunnel::ZbTunnel(string name, boost::shared_ptr<io_service>& io_service):name_(name), running_(false)
 	{
 		this->io_service_ = io_service;
 	}
@@ -52,6 +52,9 @@ namespace zb {
 			catch (const std::exception& e) {
 				gconf.log(gconf_type::DEBUG_TUNNEL, gconf_type::LOG_WARN, "ZbTunnel", name_ + ": " + e.what());
 				last_error_ = e.what();
+#ifdef DEBUG
+				throw;
+#endif
 			}
 			catch (...) {
 				gconf.log(gconf_type::DEBUG_TUNNEL, gconf_type::LOG_WARN, "ZbTunnel", name_ + ": worker crashed");
@@ -66,16 +69,16 @@ namespace zb {
 		}
 	}
 
-	bool ZbTunnel::running() {
-		return (worker_ && !io_service_->stopped());
-	}
-
 	void ZbTunnel::wait() {
 		if (worker_.get() && !io_service_->stopped())
 			worker_->join();
 	}
 
 	void ZbTunnel::stop() {
+		running_ = false;
+
+		_stop();
+
 		if (manager_.get() != 0) {
 			manager_->stop_all();
 		}
@@ -83,10 +86,11 @@ namespace zb {
 
 	void ZbTunnel::init() {
 		if (manager_.get() == 0) {
-			manager_.reset(new ZbConnectionManager());
+			manager_.reset(new ZbConnectionManager(name_));
 		}
 
 		init_coders();
+		_init();
 	}
 
 	void ZbTunnel::init_coders() {
@@ -128,25 +132,26 @@ namespace zb {
 		start();
 	}
 
-	void ZbSocketTunnel::start() {
+	void ZbSocketTunnel::_start() {
 		init();
 		start_accept();
 
-		gconf.log(gconf_type::DEBUG_TUNNEL, gconf_type::LOG_WARN, "ZbSocketTunnel", name_ + ": Starting on " + local_address_ + ":" + boost::lexical_cast<string>(local_port_));
+		gconf.log(gconf_type::DEBUG_TUNNEL, gconf_type::LOG_INFO, "ZbSocketTunnel", name_ + ": Starting on " + local_address_ + ":" + boost::lexical_cast<string>(local_port_));
 	}
 
-	void ZbSocketTunnel::stop() {
+	void ZbSocketTunnel::_stop() {
 		if (acceptor_.get() != 0) {
 			gconf.log(gconf_type::DEBUG_TUNNEL, gconf_type::LOG_DEBUG, "ZbSocketTunnel", name_ + ": Acceptor stopped");
 			acceptor_->close();
 			acceptor_.reset();
 		}
-
-		ZbTunnel::stop();
 	}
 
-	void ZbSocketTunnel::init() {
-		ZbTunnel::init();
+	void ZbSocketTunnel::_init() {
+		assert(manager_.get() != 0);
+		config_type& conf0 = config_[0];
+		manager_->preconnect(CONFIG_GET_INT(conf0, "preconnect", gconf.preconnect()));
+		manager_->max_reuse(CONFIG_GET_INT(conf0, "max_reuse", gconf.max_reuse()));
 
 		if (acceptor_.get() != 0 && (old_local_port_ != local_port_ || old_local_address_.compare(local_address_) != 0)) {
 			acceptor_->close();
@@ -156,6 +161,7 @@ namespace zb {
 			try {
 				boost::asio::ip::address addr = boost::asio::ip::address::from_string(local_address_);				
 				acceptor_.reset(new tcp::acceptor(*io_service_, tcp::endpoint(addr, local_port_)));
+				acceptor_->set_option(tcp::no_delay(true));
 				gconf.log(gconf_type::DEBUG_TUNNEL, gconf_type::LOG_DEBUG, "ZbSocketTunnel", name_ + ": Acceptor reseted");
 			} catch (std::exception& e) {
 				gconf.log(gconf_type::DEBUG_TUNNEL, gconf_type::LOG_WARN, "ZbSocketTunnel", name_ + ": Unable to bind to local address");
@@ -166,6 +172,7 @@ namespace zb {
 
 	void ZbSocketTunnel::start_accept()
 	{
+		if (!running_) return;
 		socket_ptr socket(new tcp::socket(*io_service_));
 		ZbSocketTransport::pointer tp(new ZbSocketTransport(socket, io_service_));
 		
@@ -181,10 +188,11 @@ namespace zb {
 	{
 		if (!error)
 		{
-			gconf.log(gconf_type::DEBUG_TUNNEL, gconf_type::LOG_DEBUG, "ZbSocketTunnel", name_ + ": Accpeted a new connection ...");
+			gconf.log(gconf_type::DEBUG_TUNNEL, gconf_type::LOG_INFO, "ZbSocketTunnel", name_ + ": Accpeted a new connection ...");
 			assert(manager_.get() != 0);
 
 			ZbConnection::pointer conn = manager_->get_or_create_conn(io_service_, shared_from_this());
+			in->socket()->set_option(tcp::no_delay(true));
 			conn->start(in);
 			start_accept();
 		} else {
@@ -207,7 +215,7 @@ namespace zb {
 		start();
 	}
 
-	void ZbIoTunnel::start() {
+	void ZbIoTunnel::_start() {
 		init();
 
 		assert(manager_.get() != 0);
@@ -215,15 +223,13 @@ namespace zb {
 		ZbStreamTransport::pointer tp(new ZbStreamTransport(io_service_));
 		conn->start(tp);
 
-		gconf.log(gconf_type::DEBUG_TUNNEL, gconf_type::LOG_WARN, "ZbIoTunnel", name_ + ": Starting on stdin");
+		gconf.log(gconf_type::DEBUG_TUNNEL, gconf_type::LOG_INFO, "ZbIoTunnel", name_ + ": Starting on stdin");
 	}
 
-	void ZbIoTunnel::stop() {
-		ZbTunnel::stop();
+	void ZbIoTunnel::_stop() {
 	}
 
-	void ZbIoTunnel::init() {
-		ZbTunnel::init();
+	void ZbIoTunnel::_init() {
 	}
 
 }

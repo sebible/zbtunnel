@@ -8,7 +8,8 @@ namespace zb {
 		pointer p(new ZbConnection());
 	
 		p->client_ = client;
-		p->out_.reset(new ZbSocketTransport(socket_ptr(new tcp::socket(*service)), service));
+		socket_ptr socket(new tcp::socket(*service));
+		p->out_.reset(new ZbSocketTransport(socket, service));
 
 		return p->shared_from_this();
 	}
@@ -19,7 +20,7 @@ namespace zb {
 
 	string ZbConnection::to_string() {
 		std::stringstream s;
-		s << "#" << boost::lexical_cast<string>(out_.get()) << "." << current_;
+		s << owner_ << "#" << boost::lexical_cast<string>(id_) << "." << current_;
 		return s.str();
 	}
 
@@ -30,25 +31,35 @@ namespace zb {
 		return "";
 	}
 
-	void ZbConnection::start(const ZbTransport::pointer& in)
+	void ZbConnection::start(ZbTransport::pointer in)
 	{
-		assert(in_.get() == 0);
 		in_ = in;
 
 		if (state_ == CONNECTED) {
 			// Start transfer right away;
-			handle_init(error_code());
+			assert(in_.get() != 0);
+			gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_INFO, "ZbConnection", to_string() + string(" reused, starting to transfer"));
+			if (in_.get()) in_->async_receive(buf_[0][0], BUFSIZE, bind(&ZbConnection::handle_transfer, shared_from_this(), _1, _2, 0));	
 			return;
 		}
+
+		if (state_ == CONNECTING) {
+			assert(in_.get() != 0);
+			gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_INFO, "ZbConnection", to_string() + string(" reused, connecting in progress"));
+			// Connecting in progress. do nothing. 
+			return;
+		}
+		
+		gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_DEBUG, "ZbConnection", to_string() + string(" starting") + (in_.get() == 0 ? " for preconnecting" : ""));
 
 		shared_ptr<ZbTunnel> c = client_.lock();
 		assert(c.get() != 0);
 
-		gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_DEBUG, "ZbConnection", string("Starting ") + to_string());
 		try {
+			state_ = CONNECTING;
 			// Create connection to server
 			if (c->endpoint_cache_.get() != 0) {
-				gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_DEBUG, "ZbConnection", to_string() + string(" is making first connection using cache"));
+				gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_DEBUG, "ZbConnection", to_string() + string(" is making first connection to cached endpoint"));
 				out_->async_connect(*(c->endpoint_cache_), bind(&ZbConnection::handle_connect, shared_from_this(), _1));
 			} else {
 				string host = CONFIG_GET(c->config_[0], "host", STATETHROW("host missing in conf0"));
@@ -58,15 +69,17 @@ namespace zb {
 			}
 		} catch (std::exception &e) {
 			// Error connecting to remote
-			gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_WARN, "ZbConnection", string("Start failed.") + e.what());
+			gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_WARN, "ZbConnection", string("Start failed. ") + e.what());
 			c->last_error_ = e.what();
 			stop(false);
 			return;
 		}
 	}
 
-	void ZbConnection::stop(bool reusable)
+	void ZbConnection::stop(bool reusable, bool remove)
 	{
+		if (in_.get() == 0 && (out_.get() == 0 || !out_->is_open())) return;
+
 		string err1 = in_.get() ? in_->last_error() : "";
 		string err2 = out_->last_error();
 
@@ -83,16 +96,19 @@ namespace zb {
 		ZbConnectionManager::pointer m;
 		if (c.get() != 0) m = c->manager_;
 
+		bool reused = false;
 		if (reusable && state_ == CONNECTED && out_->is_open() && out_->last_error().empty() && m.get() != 0) {
-			gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_DEBUG, "ZbConnection", to_string() + string(" recycled") + (err1.empty() ? "" : " with error:"));
-			m->recycle(shared_from_this());
+			gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_INFO, "ZbConnection", to_string() + string(" to be recycled"));
+			reused = m->recycle(shared_from_this());
 		}
-		else {
-			if (m.get() != 0) m->remove(shared_from_this());
-			gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_DEBUG, "ZbConnection", to_string() + string(" stopped") + ((err1.empty() && err2.empty()) ? "" : " with error:"));
-			if (!err1.empty()) gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_WARN, "ZbConnection", string("in: ") + err1);
-			if (!err2.empty()) gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_WARN, "ZbConnection", string("out: ") + err2);
+		
+		if (!reused) {
+			if (m.get() != 0 && remove) m->remove(shared_from_this());
+			gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_INFO, "ZbConnection", to_string() + string(" stopped") + ((err1.empty() && err2.empty()) ? "" : " with error"));
+			if (!err1.empty()) gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_DEBUG, "ZbConnection", string("in: ") + err1);
+			if (!err2.empty()) gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_DEBUG, "ZbConnection", string("out: ") + err2);
 			out_->close();
+			// Hold out_ in case there are some async ops to be finished
 		}
 	}
 
@@ -109,9 +125,11 @@ namespace zb {
 		ZbTunnel::pointer c = client_.lock();
 		assert(c.get() != 0);
 
-		if (c->endpoint_cache_.get() == 0) {
-			ZbSocketTransport* tp = dynamic_cast<ZbSocketTransport*>(out_.get());
-			if (tp) c->endpoint_cache_.reset(new tcp::endpoint(tp->get_endpoint()));
+		if (current_ == 0) {
+			if (c->endpoint_cache_.get() == 0) {
+				ZbSocketTransport* tp = dynamic_cast<ZbSocketTransport*>(out_.get());
+				if (tp) c->endpoint_cache_.reset(new tcp::endpoint(tp->get_endpoint()));
+			}
 		}
 		
 		if ((int)c->config_.size() > current_) {
@@ -175,15 +193,16 @@ namespace zb {
 			current_++;
 		} else {
 			// Start transfer
-			gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_DEBUG, "ZbConnection", "Connected, start to transfer");
-			in_->async_receive(buf_[0][0], BUFSIZE, bind(&ZbConnection::handle_transfer, shared_from_this(), _1, _2, 0));		
+			state_ = CONNECTED;
+			gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_INFO, "ZbConnection", to_string() + " connected, " + (in_.get() == 0 ? "waiting for incoming connection" : "starting to transfer"));
+			if (in_.get()) in_->async_receive(buf_[0][0], BUFSIZE, bind(&ZbConnection::handle_transfer, shared_from_this(), _1, _2, 0));		
 			out_->async_receive(buf_[1][0], BUFSIZE, bind(&ZbConnection::handle_transfer, shared_from_this(), _1, _2, 1));		
 		}
 	}
 
 	void ZbConnection::handle_transfer(const error_code& error, size_t size, int direction) {
 		if (error) {
-			gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_DEBUG, "ZbConnection", error.message() + boost::lexical_cast<string>(direction));
+			gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_DEBUG, "ZbConnection", to_string() + " dir:" + boost::lexical_cast<string>(direction) + " transfer interrupted:" + error.message());
 			stop(direction == 0); 
 			return;
 		}
