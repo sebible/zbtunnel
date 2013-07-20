@@ -25,12 +25,12 @@
 #pragma once
 
 #include "zbconfig.hpp"
-#include "zbtransport.hpp"
 
 namespace zb {
 
 	class ZbTunnel;
 	class ZbConnectionManager;
+	class ZbTransport;
 
 	class ZbConnection
 	  : public boost::enable_shared_from_this<ZbConnection>
@@ -45,8 +45,10 @@ namespace zb {
 		static pointer create(shared_ptr<io_service>& io_service, client_ptr client);
 
 		string to_string();
-		void start(ZbTransport::pointer in = ZbTransport::pointer());
-		void stop(bool reusable, bool remove = true);
+		template <typename TransportPointer>
+		void start(TransportPointer in);
+		void start();
+		void stop(bool recycle, bool remove = true);
 
 		ZB_GETTER_SETTER(id, int);
 		ZB_GETTER_SETTER(owner, string);
@@ -63,7 +65,7 @@ namespace zb {
 		string owner_;
 		buf_type buf_[2]; // two directions
 		client_ptr client_;
-		ZbTransport::pointer in_, out_;
+		shared_ptr<ZbTransport> in_, out_;
 		enum {INIT, CONNECTING, CONNECTED, BAD} state_;
 	};
 

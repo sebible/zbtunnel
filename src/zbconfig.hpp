@@ -37,11 +37,6 @@
 #endif 
 
 #include <boost/asio.hpp>
-#include <boost/asio/steady_timer.hpp>
-#include <boost/chrono.hpp>
-#ifdef WITH_OPENSSL
-#include <boost/asio/ssl.hpp>
-#endif
 #include <boost/shared_ptr.hpp>
 #include <boost/scoped_ptr.hpp>
 #include <boost/enable_shared_from_this.hpp>
@@ -113,12 +108,15 @@ namespace zb {
 			LOG_NONE=3,
 		};
 
+		typedef boost::function<void (unsigned int, log_level_type, string, string)> log_func_type;
+
 		ZB_GETTER_SETTER(log_filter, unsigned int);
 		ZB_GETTER_SETTER(log_level, log_level_type);
-		ZB_GETTER_SETTER(allow_reuse, bool);
+		ZB_GETTER_SETTER(recycle, bool);
 		ZB_GETTER_SETTER(preconnect, unsigned int);
 		ZB_GETTER_SETTER(max_reuse, unsigned int);
 		ZB_GETTER_SETTER(out, std::ostream*);
+		ZB_GETTER_SETTER(log, log_func_type);
 		
 		void log(unsigned int f, log_level_type l, string module, string msg) {log_(f, l, module, msg);}
 		void flush() {if (out_) out_->flush();}
@@ -132,18 +130,18 @@ namespace zb {
 	protected:
 		std::ostream* out_;
 		unsigned int log_filter_, preconnect_, max_reuse_;
-		bool allow_reuse_;
+		bool recycle_;
 		log_level_type log_level_;
-		boost::function<void (unsigned int, log_level_type, string, string)> log_;
+		log_func_type log_;
 		static ZbConfig *instance_;
 
 		ZbConfig() {
 			out_ = &std::cout;
 			log_level_ = LOG_INFO;
 			log_filter_ = DEBUG_TUNNEL | DEBUG_CONNECTION | DEBUG_CONNECTION_MANAGER;
-			allow_reuse_ = 1;
+			recycle_ = 0;
 			preconnect_ = 0;
-			max_reuse_ = 5;
+			max_reuse_ = 10;
 			log_ = boost::bind(&ZbConfig::_dummy_log, this, _1, _2, _3, _4);
 		}
 

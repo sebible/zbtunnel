@@ -90,7 +90,7 @@ namespace zb {
 						const ptree::ptree& global = node.second;
 						gconf.log_filter(global.get("log_filter", gconf.log_filter()));
 						gconf.log_level((zb::ZbConfig::log_level_type)global.get("log_level", (int)gconf.log_level()));
-						gconf.allow_reuse(global.get<bool>("log_level", gconf.allow_reuse()));
+						gconf.recycle(global.get<bool>("recycle", gconf.recycle()));
 						gconf.preconnect(global.get("preconnect", (int)gconf.preconnect()));
 					} else if (node.first.compare("-") == 0) {
 						if (tunnels_.size() > 0) 

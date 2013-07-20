@@ -1,6 +1,7 @@
 #include "zbconnection.hpp"
 #include "zbtunnel.hpp"
 #include "zbconnectionmanager.hpp"
+#include "zbtransport.hpp"
 
 namespace zb {
 	ZbConnection::pointer ZbConnection::create(shared_ptr<io_service>& service, client_ptr client)
@@ -31,7 +32,12 @@ namespace zb {
 		return "";
 	}
 
-	void ZbConnection::start(ZbTransport::pointer in)
+	void ZbConnection::start() {
+		start(ZbTransport::pointer());
+	}
+
+	template <typename TransportPointer>
+	void ZbConnection::start(TransportPointer in)
 	{
 		in_ = in;
 
@@ -76,17 +82,15 @@ namespace zb {
 		}
 	}
 
-	void ZbConnection::stop(bool reusable, bool remove)
+	void ZbConnection::stop(bool recycle, bool remove)
 	{
 		if (in_.get() == 0 && (out_.get() == 0 || !out_->is_open())) return;
 
 		string err1 = in_.get() ? in_->last_error() : "";
 		string err2 = out_->last_error();
 
-		reusable = reusable && gconf.allow_reuse();
-
 		if (in_.get() == 0) {
-			reusable = false;
+			recycle = false;
 		} else {
 			in_->close();
 			in_.reset();
@@ -95,15 +99,16 @@ namespace zb {
 		ZbTunnel::pointer c = client_.lock();
 		ZbConnectionManager::pointer m;
 		if (c.get() != 0) m = c->manager_;
+		assert(m.get() != 0);
 
 		bool reused = false;
-		if (reusable && state_ == CONNECTED && out_->is_open() && out_->last_error().empty() && m.get() != 0) {
+		if (recycle && m->recycle() && state_ == CONNECTED && out_->is_open() && out_->last_error().empty()) {
 			gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_INFO, "ZbConnection", to_string() + string(" to be recycled"));
 			reused = m->recycle(shared_from_this());
 		}
 		
 		if (!reused) {
-			if (m.get() != 0 && remove) m->remove(shared_from_this());
+			if (remove) m->remove(shared_from_this());
 			gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_INFO, "ZbConnection", to_string() + string(" stopped") + ((err1.empty() && err2.empty()) ? "" : " with error"));
 			if (!err1.empty()) gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_DEBUG, "ZbConnection", string("in: ") + err1);
 			if (!err2.empty()) gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::LOG_DEBUG, "ZbConnection", string("out: ") + err2);

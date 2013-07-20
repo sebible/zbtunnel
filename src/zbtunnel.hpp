@@ -46,6 +46,7 @@ namespace zb {
 
 		void start() {running_=true; _start();};
 		void stop();
+		void _stop_impl();
 		virtual void start_with_config(chain_config_type& config) throw (string) {throw string("not implemented");};
 		virtual void _start() {throw string("not implemented");};
 		virtual void _stop() {throw string("not implemented");};
@@ -89,8 +90,8 @@ namespace zb {
 		ZbSocketTunnel(string name, shared_ptr<io_service>& io_service);
 		~ZbSocketTunnel();
 
-		string local_address() {return local_address_;};
-		int local_port() {return local_port_;};
+		string local_address() {return acceptor_.get() != 0 ? acceptor_->local_endpoint().address().to_string() : local_address_;};
+		int local_port() {return acceptor_.get() != 0 ? acceptor_->local_endpoint().port() : local_port_;};
 
 		virtual void start_with_config(chain_config_type& config) throw (string);
 		virtual void _start();
@@ -99,7 +100,8 @@ namespace zb {
 	protected:
 		virtual void _init();
 		void start_accept();
-		void handle_accept(ZbSocketTransport::pointer& in,  const error_code& error);
+		template <typename SocketTransportPointer>
+		void handle_accept(SocketTransportPointer& in,  const error_code& error);
 
 	private:
 		typedef scoped_ptr<tcp::acceptor> acceptor_ptr;

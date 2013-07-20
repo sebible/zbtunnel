@@ -28,6 +28,12 @@
 #include "zbcoder.hpp"
 #include "base64.h"
 
+#include <boost/asio/steady_timer.hpp>
+#include <boost/chrono/chrono.hpp>
+#ifdef WITH_OPENSSL
+#include <boost/asio/ssl.hpp>
+#endif
+
 
 namespace zb {
 
@@ -306,25 +312,29 @@ namespace zb {
 		}
 
 		virtual bool is_open() {
-			assert(socket_.get() != 0);
-			return socket_->is_open();
+			return socket_.get() != 0 && socket_->is_open();
 		}
 
 		virtual void close() {
-			assert(socket_.get() != 0);
-			socket_->close();
+			if (socket_.get() != 0 && socket_->is_open()) {
+				socket_->close();
+				socket_.reset();
+			}
 		}
 
 		virtual void async_connect(string host, string port, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
 			resolver_.reset(new tcp::resolver(*io_service_));
 			tcp::resolver::query socks_query(host, port, tcp::resolver::query::all_matching | tcp::resolver::query::numeric_service);
-
-
+			
 			gconf.log(gconf_type::DEBUG_SOCKS, gconf_type::LOG_DEBUG, "ZbSocketTransport", string("Resolving ") + host + ":" + port);
 			resolver_->async_resolve(socks_query, boost::bind(&ZbSocketTransport::_handle_resolve, boost::static_pointer_cast<ZbSocketTransport>(shared_from_this()), _1, _2, handler));
 		};
 
 		virtual void async_connect(const tcp::endpoint& endpoint, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
+			if (socket_.get() == 0 || socket_->is_open()) {
+				invoke_callback(boost::bind(handler, make_error_code(errc::connection_already_in_progress)));
+				return;
+			}
 			socket_->async_connect(endpoint, boost::bind(&ZbSocketTransport::_handle_connected, boost::static_pointer_cast<ZbSocketTransport>(shared_from_this()), _1, handler));
 		}
 
@@ -335,8 +345,12 @@ namespace zb {
 				return;
 			}
 
+			if (socket_.get() == 0 || socket_->is_open()) {
+				invoke_callback(boost::bind(handler, make_error_code(errc::connection_already_in_progress)));
+				return;
+			}
+
 			gconf.log(gconf_type::DEBUG_SOCKS, gconf_type::LOG_DEBUG, "ZbSocketTransport", "Resolved");
-			assert(socket_.get() != 0);
 			boost::asio::async_connect(*socket_, iterator, boost::bind(&ZbSocketTransport::_handle_connected, boost::static_pointer_cast<ZbSocketTransport>(shared_from_this()), _1, handler));
 		}
 
@@ -351,6 +365,10 @@ namespace zb {
 		virtual void async_send(const data_type data,const size_t size,
 			BOOST_ASIO_MOVE_ARG(write_handler_type) handler)
 		{
+			if (socket_.get() == 0 || !socket_->is_open()) {
+				invoke_callback(boost::bind(handler, make_error_code(errc::connection_aborted), 0));
+				return;
+			}
 			gconf.log(gconf_type::DEBUG_SOCKS, gconf_type::LOG_DEBUG, "ZbSocketTransport", string("Sending:\n") + string((char*)data, size));
 			socket_->async_send(boost::asio::buffer(data, size), handler);
 		};
@@ -358,6 +376,10 @@ namespace zb {
 		virtual void async_receive(const data_type& data, const size_t& size,
 			BOOST_ASIO_MOVE_ARG(read_handler_type) handler)
 		{
+			if (socket_.get() == 0 || !socket_->is_open()) {
+				invoke_callback(boost::bind(handler, make_error_code(errc::connection_aborted), 0));
+				return;
+			}
 			socket_->async_read_some(boost::asio::buffer(data, size), handler);
 		};
 	}; // ZbSocketTransport

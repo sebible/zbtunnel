@@ -36,15 +36,17 @@ namespace zb {
 	public:
 		typedef shared_ptr<ZbConnectionManager> pointer;
 
-		ZbConnectionManager(string name_prefix, int preconnect = 0, int max_reuse = 5) {
+		ZbConnectionManager(string name_prefix) {
 			name_ = name_prefix;
-			max_reuse_ = max_reuse;
-			preconnect_ = preconnect;
+			max_reuse_ = 0;
+			preconnect_ = 0;
+			recycle_ = false;
 			id_ = 0;
 		};
 
 		ZB_GETTER_SETTER(max_reuse, int);
 		ZB_GETTER_SETTER(preconnect, int);
+		ZB_GETTER_SETTER(recycle, bool);
 
 		void add(ZbConnection::pointer conn) {
 			conns_.insert(conn);
@@ -75,8 +77,8 @@ namespace zb {
 		}
 
 		bool recycle(ZbConnection::pointer conn) {
-			if (reusable_conns_.size() >= max_reuse_) {
-				gconf.log(gconf_type::DEBUG_CONNECTION_MANAGER, gconf_type::LOG_INFO, "ZbConnectionManager", conn->to_string() + string(" recycled failed. max_reuse is reached."));
+			if (!recycle_ || reusable_conns_.size() >= max_reuse_) {
+				gconf.log(gconf_type::DEBUG_CONNECTION_MANAGER, gconf_type::LOG_INFO, "ZbConnectionManager", conn->to_string() + string(" recycled rejected."));
 				return false;
 			}
 
@@ -115,6 +117,7 @@ namespace zb {
 
 		string name_;
 		unsigned int preconnect_, max_reuse_, id_;
+		bool recycle_;
 		conn_set conns_;
 		conn_set reusable_conns_;
 	};
