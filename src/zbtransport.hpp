@@ -37,8 +37,11 @@
 
 namespace zb {
 
+        class ZbTransportHolder;
+
 	class ZbTransport: public boost::enable_shared_from_this<ZbTransport>
 	{
+            friend class ZbTransportHolder;
 	public:
 		typedef boost::function<void (const error_code&)> connect_handler_type;
 		typedef boost::function<void (const error_code&, const size_t)> read_handler_type;
@@ -46,7 +49,6 @@ namespace zb {
 		typedef boost::function<void ()> callback_type;
 		typedef shared_ptr<ZbTransport> pointer;
 		typedef uint8_t* data_type;
-		typedef ZbTransport lowest_layer_type;
 
 		ZbTransport(const pointer& parent):parent_(parent) {
 			if (parent_.get() && parent->io_service_.get() != 0)
@@ -56,10 +58,6 @@ namespace zb {
 		io_service& get_io_service() {
 			assert(io_service_.get() != 0);
 			return *io_service_;
-		}
-
-		lowest_layer_type& lowest_layer() {
-			return *this;
 		}
 
 		string last_error() {
@@ -73,8 +71,8 @@ namespace zb {
 			return last_error_.empty();
 		}
 
-		virtual void async_connect(string host, string port, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {};
-		virtual void async_connect(const tcp::endpoint& endpoint, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
+		virtual void async_connect(string host, string port, const connect_handler_type& handler) {};
+		virtual void async_connect(const tcp::endpoint& endpoint, const connect_handler_type& handler) {
 			async_connect(endpoint.address().to_string(), boost::lexical_cast<string>(endpoint.port()), handler);
 		}
 		virtual void handle_read_data(data_type data, size_t size) {};
@@ -84,35 +82,35 @@ namespace zb {
 			if (parent_.get() != 0) parent_->close();
 		};
 
-		virtual void init(BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
+		virtual void init(const connect_handler_type& handler) {
 			invoke_callback(boost::bind(handler, error_code()));
 		}
 
 		virtual void async_send(const data_type data,const size_t size,
-			BOOST_ASIO_MOVE_ARG(write_handler_type) handler)
+			const write_handler_type& handler)
 		{
 			handle_write_data(data, size);
 			assert(parent_.get() != 0);
-			parent_->async_send(data, size, BOOST_ASIO_MOVE_CAST(write_handler_type)(handler));
+			parent_->async_send(data, size, handler);
 		};
 
 		virtual void async_write_some(const boost::asio::mutable_buffer& buffer,
-			BOOST_ASIO_MOVE_ARG(write_handler_type) handler) {
+			const write_handler_type& handler) {
 			std::size_t size = boost::asio::buffer_size(buffer);
 			data_type data = boost::asio::buffer_cast<data_type>(buffer);
 			async_send(data, size, handler);
 		}
 
 		virtual void async_receive(const data_type& data, const size_t& size,
-			BOOST_ASIO_MOVE_ARG(read_handler_type) handler)
+			const read_handler_type& handler)
 		{
 			assert(parent_.get() != 0);
-			read_handler_type r = boost::bind(&ZbTransport::_read_handler, this, _1, _2, data, handler);
+			const read_handler_type& r = boost::bind(&ZbTransport::_read_handler, shared_from_this(), _1, _2, data, handler);
 			parent_->async_receive(data, size, r);
 		}
 
 		virtual void async_read_some(const boost::asio::mutable_buffer& buffer,
-			BOOST_ASIO_MOVE_ARG(read_handler_type) handler)
+			const read_handler_type& handler)
 		{
 			std::size_t size = boost::asio::buffer_size(buffer);
 			data_type data = boost::asio::buffer_cast<data_type>(buffer);
@@ -120,7 +118,7 @@ namespace zb {
 		}
 
 		void _read_handler(const error_code& error, const size_t size, const data_type data, 
-			BOOST_ASIO_MOVE_ARG(read_handler_type) handler)
+			const read_handler_type& handler)
 		{
 			if (!error)
 				handle_read_data(data, size);
@@ -182,13 +180,13 @@ namespace zb {
 			hout_ = hin_ = INVALID_HANDLE_VALUE;
 		}
 
-		virtual void async_connect(string host, string port, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
+		virtual void async_connect(string host, string port, const connect_handler_type& handler) {
 			last_error_ = "connecting is not supported by this transport";
 			throw string(last_error_);
 		}
 
 		virtual void async_send(const data_type data,const size_t size,
-			BOOST_ASIO_MOVE_ARG(write_handler_type) handler) {
+			const write_handler_type& handler) {
 
 			DWORD d;
 			if (WriteFile(hout_, data, size, &d, 0))
@@ -200,7 +198,7 @@ namespace zb {
 		}
 
 		virtual void async_receive(const data_type& data, const size_t& size,
-			BOOST_ASIO_MOVE_ARG(read_handler_type) handler) {
+			const read_handler_type& handler) {
 			unsigned long s = 0;
 
 			std::cout.flush();
@@ -230,7 +228,7 @@ namespace zb {
 		}
 
 		void _handle_timer(const error_code& error, const data_type& data, const size_t& size,
-			BOOST_ASIO_MOVE_ARG(read_handler_type) handler) {
+			const read_handler_type& handler) {
 			if (error) {
 				return;
 			}
@@ -267,19 +265,19 @@ namespace zb {
 		virtual void close() {
 		}
 
-		virtual void async_connect(string host, string port, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
+		virtual void async_connect(string host, string port, const connect_handler_type& handler) {
 			last_error_ = "connecting is not supported by this transport";
 			throw string(last_error_);
 		}
 
 		virtual void async_send(const data_type data,const size_t size,
-			BOOST_ASIO_MOVE_ARG(write_handler_type) handler) {
+			const write_handler_type& handler) {
 
             boost::asio::async_write(out_, boost::asio::buffer(data, size), handler);
 		}
 
 		virtual void async_receive(const data_type& data, const size_t& size,
-			BOOST_ASIO_MOVE_ARG(read_handler_type) handler) {
+			const read_handler_type& handler) {
 
 			in_.async_read_some(boost::asio::buffer(data, size), handler);			
 		}
@@ -322,7 +320,7 @@ namespace zb {
 			}
 		}
 
-		virtual void async_connect(string host, string port, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
+		virtual void async_connect(string host, string port, const connect_handler_type& handler) {
 			resolver_.reset(new tcp::resolver(*io_service_));
 			tcp::resolver::query socks_query(host, port, tcp::resolver::query::all_matching | tcp::resolver::query::numeric_service);
 			
@@ -330,7 +328,7 @@ namespace zb {
 			resolver_->async_resolve(socks_query, boost::bind(&ZbSocketTransport::_handle_resolve, boost::static_pointer_cast<ZbSocketTransport>(shared_from_this()), _1, _2, handler));
 		};
 
-		virtual void async_connect(const tcp::endpoint& endpoint, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
+		virtual void async_connect(const tcp::endpoint& endpoint, const connect_handler_type& handler) {
 			if (socket_.get() == 0 || socket_->is_open()) {
 				invoke_callback(boost::bind(handler, make_error_code(errc::connection_already_in_progress)));
 				return;
@@ -338,7 +336,7 @@ namespace zb {
 			socket_->async_connect(endpoint, boost::bind(&ZbSocketTransport::_handle_connected, boost::static_pointer_cast<ZbSocketTransport>(shared_from_this()), _1, handler));
 		}
 
-		void _handle_resolve(const error_code& error, tcp::resolver::iterator iterator, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
+		void _handle_resolve(const error_code& error, tcp::resolver::iterator iterator, const connect_handler_type& handler) {
 			if (error) {
 				last_error_ = error.message();
 				invoke_callback(boost::bind(handler, error));
@@ -351,10 +349,11 @@ namespace zb {
 			}
 
 			gconf.log(gconf_type::DEBUG_SOCKS, gconf_type::LOG_DEBUG, "ZbSocketTransport", "Resolved");
-			boost::asio::async_connect(*socket_, iterator, boost::bind(&ZbSocketTransport::_handle_connected, boost::static_pointer_cast<ZbSocketTransport>(shared_from_this()), _1, handler));
+                        boost::function<void (const error_code&, const tcp::resolver::iterator&)> h = boost::bind(&ZbSocketTransport::_handle_connected, boost::static_pointer_cast<ZbSocketTransport>(shared_from_this()), _1, handler);
+			boost::asio::async_connect(*socket_, iterator, h);
 		}
 
-		void _handle_connected(const error_code& error, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
+		void _handle_connected(const error_code& error, const connect_handler_type& handler) {
 			/*if (!error) {
 				socket_->set_option(tcp::no_delay(true));
 				socket_->set_option(boost::asio::socket_base::keep_alive(true));
@@ -363,7 +362,7 @@ namespace zb {
 		}
 
 		virtual void async_send(const data_type data,const size_t size,
-			BOOST_ASIO_MOVE_ARG(write_handler_type) handler)
+			const write_handler_type& handler)
 		{
 			if (socket_.get() == 0 || !socket_->is_open()) {
 				invoke_callback(boost::bind(handler, make_error_code(errc::connection_aborted), 0));
@@ -374,7 +373,7 @@ namespace zb {
 		};
 
 		virtual void async_receive(const data_type& data, const size_t& size,
-			BOOST_ASIO_MOVE_ARG(read_handler_type) handler)
+			const read_handler_type& handler)
 		{
 			if (socket_.get() == 0 || !socket_->is_open()) {
 				invoke_callback(boost::bind(handler, make_error_code(errc::connection_aborted), 0));
@@ -403,7 +402,7 @@ namespace zb {
 			coder_ = cp->get_coder(method, key);
 		}
 
-		virtual void async_connect(string host, string port, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
+		virtual void async_connect(string host, string port, const connect_handler_type& handler) {
 			if (host.empty() || port.empty()) {
 				last_error_ = string("Bad host:port");
 				invoke_callback(boost::bind(handler, make_error_code(errc::bad_address)));
@@ -448,7 +447,7 @@ namespace zb {
 			password = CONFIG_GET(conf, "password", "");
 		}
 
-		virtual void async_connect(string host, string port, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
+		virtual void async_connect(string host, string port, const connect_handler_type& handler) {
 			if (host.empty() || port.empty()) {
 				last_error_ = string("Bad host:port");
 				invoke_callback(boost::bind(handler, make_error_code(errc::bad_address)));
@@ -469,7 +468,7 @@ namespace zb {
 			async_receive(buf, sizeof(buf), boost::bind(&ZbHttpTransport::_handle_http_connect, boost::static_pointer_cast<ZbHttpTransport>(shared_from_this()), _1, _2, handler));
 		};
 
-		void _handle_http_connect(const error_code& error, const size_t size, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
+		void _handle_http_connect(const error_code& error, const size_t size, const connect_handler_type& handler) {
 			if (error && size <= 0) {
 				last_error_ = error.message();
 				invoke_callback(boost::bind(handler, error));
@@ -501,13 +500,49 @@ namespace zb {
 	}; // ZbHttpTransport
 
 #ifdef WITH_OPENSSL
+        class ZbTransportHolder {
+        public:
+            typedef ZbTransportHolder lowest_layer_type;
+
+            ZbTransportHolder(ZbTransport::pointer p = ZbTransport::pointer()):p_(p) {
+            }
+
+            void async_write_some(const boost::asio::mutable_buffer& buffer,
+                const ZbTransport::write_handler_type& handler) {
+                assert(p_.get() != 0);
+                p_->parent_->async_write_some(buffer, handler);
+            }
+            
+            void async_read_some(const boost::asio::mutable_buffer& buffer,
+	        const ZbTransport::read_handler_type& handler)
+	    {
+                assert(p_.get() != 0);
+                p_->parent_->async_read_some(buffer, handler);
+            }
+            
+            io_service& get_io_service() {
+                assert(p_.get() != 0);
+                return p_->get_io_service();
+            }
+
+            lowest_layer_type& lowest_layer() {
+                return *this;
+            }
+
+            ZB_GETTER_SETTER(p, ZbTransport::pointer);
+
+        protected:
+            ZbTransport::pointer p_;
+        };
+
 	class ZbHttpsTransport: public ZbHttpTransport
 	{
 	protected:
-		typedef boost::asio::ssl::stream<ZbTransport> stream_type;
+		typedef boost::asio::ssl::stream<ZbTransportHolder> stream_type;
 		typedef shared_ptr<stream_type> stream_ptr;
 		stream_ptr stream_;
 		scoped_ptr<boost::asio::ssl::context> ctx;
+                ZbTransportHolder holder_;
 
 	public:
 		ZbHttpsTransport(pointer& parent, config_type& conf):ZbHttpTransport(parent, conf) {
@@ -516,22 +551,27 @@ namespace zb {
 				ctx.reset(new boost::asio::ssl::context(boost::asio::ssl::context::sslv23));
 			else if (ssl_type.compare("tls1") == 0)
 				ctx.reset(new boost::asio::ssl::context(boost::asio::ssl::context::tlsv1));
-			stream_.reset(new stream_type(*this, *ctx));
 		}
 
-		virtual void init(BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
-			assert(stream_.get() != 0);
+                ~ZbHttpsTransport() {
+                    holder_.p(ZbTransport::pointer());
+                }
+
+		virtual void init(const connect_handler_type& handler) {
+			assert(stream_.get() == 0);
+                        holder_.p(shared_from_this());
+			stream_.reset(new stream_type(holder_, *ctx));
 			stream_->async_handshake(boost::asio::ssl::stream_base::client, handler);
 		}
 
 		virtual void async_send(const data_type data,const size_t size,
-			BOOST_ASIO_MOVE_ARG(write_handler_type) handler)
+			const write_handler_type& handler)
 		{
 			stream_->async_write_some(boost::asio::buffer(data, size), handler);
 		};
 
 		virtual void async_receive(const data_type& data, const size_t& size,
-			BOOST_ASIO_MOVE_ARG(read_handler_type) handler)
+			const read_handler_type& handler)
 		{
 			stream_->async_read_some(boost::asio::buffer(data, size), handler);
 		};
@@ -554,7 +594,7 @@ namespace zb {
 			password = CONFIG_GET(conf, "password", "");
 		}
 
-		virtual void init(BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
+		virtual void init(const connect_handler_type& handler) {
 			std::stringstream s;
 			size_t l = 0;
 			if (username.empty()) {
@@ -570,7 +610,7 @@ namespace zb {
 			async_receive(buf, sizeof(buf), boost::bind(&ZbSocks5Transport::_handle_socks, boost::static_pointer_cast<ZbSocks5Transport>(shared_from_this()), _1, _2, 2, handler));
 		}
 
-		void _handle_socks(const error_code& error, const size_t size, const size_t target_size, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
+		void _handle_socks(const error_code& error, const size_t size, const size_t target_size, const connect_handler_type& handler) {
 			if (error) {
 				last_error_ = error.message();
 				invoke_callback(boost::bind(handler, error));
@@ -636,7 +676,7 @@ namespace zb {
 			}
 		}
 
-		virtual void async_connect(string host, string port, BOOST_ASIO_MOVE_ARG(connect_handler_type) handler) {
+		virtual void async_connect(string host, string port, const connect_handler_type& handler) {
 			if (host.empty() || port.empty()) {
 				last_error_ = string("Bad host:port");
 				invoke_callback(boost::bind(handler, make_error_code(errc::bad_address)));

@@ -26,7 +26,7 @@
 
 #include "zbconfig_inc.hpp"
 
-#define UA_STRING DISPLAY_NAME"/"VERSION
+#define UA_STRING DISPLAY_NAME "/" VERSION
 
 #ifdef DISABLE_EPOLL
 #define BOOST_ASIO_DISABLE_EPOLL

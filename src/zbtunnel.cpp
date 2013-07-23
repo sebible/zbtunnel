@@ -51,16 +51,15 @@ namespace zb {
 				gconf.log(gconf_type::DEBUG_TUNNEL, gconf_type::LOG_WARN, "ZbTunnel", name_ + ": " + e);
 				last_error_ = e;
 			}
+#ifndef DEBUG
 			catch (const std::exception& e) {
 				gconf.log(gconf_type::DEBUG_TUNNEL, gconf_type::LOG_WARN, "ZbTunnel", name_ + ": " + e.what());
 				last_error_ = e.what();
-#ifdef DEBUG
-				throw;
-#endif
 			}
 			catch (...) {
 				gconf.log(gconf_type::DEBUG_TUNNEL, gconf_type::LOG_WARN, "ZbTunnel", name_ + ": worker crashed");
 			}
+#endif
 		}
 		gconf.log(gconf_type::DEBUG_TUNNEL, gconf_type::LOG_WARN, "ZbTunnel", name_ + ": service exited");
 		worker_.reset();

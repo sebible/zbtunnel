@@ -19,16 +19,22 @@ macro (build_zbtunnel SRC_DIR BINARY_DIR)
 
 	if (MSVC)
 		set(CMAKE_CXX_FLAGS "/GF /DWIN32 /W3 /wd4996 /nologo /EHsc /wd4290 /DUNICODE /D_UNICODE /D_WINDOWS /Zm256")
-		set(CMAKE_CXX_FLAGS_DEBUG "/Od /MTd /DDEBUG /D_DEBUG /Zi /RTC1 /Gm")
+		set(CMAKE_CXX_FLAGS_DEBUG "/Od /MTd /Zi /RTC1 /Gm")
 		set(CMAKE_CXX_FLAGS_RELEASE " /GL /MT /Ox /DNDEBUG ")
 		set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} /LTCG")
 		set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /LTCG")
 	endif ()
 
-	if (UNIX AND NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin") 
-		set(CMAKE_CXX_FLAGS "-std=c++0x")
+        if (UNIX AND NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin") 
+            	set(CMAKE_CXX_FLAGS "-std=c++0x")
 		set(CMAKE_EXE_LINKER_FLAGS "-lrt")
 	endif ()
+
+        if (MSVC)
+            set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /DDEBUG /D_DEBUG")
+        else ()
+            set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -D DEBUG -D _DEBUG")
+        endif ()
 
 	file (GLOB DLL RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
 		"${SRC_DIR}/[^.]*.cpp"
