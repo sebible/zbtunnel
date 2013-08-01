@@ -37,17 +37,18 @@ macro (build_zbtunnel SRC_DIR BINARY_DIR)
         endif ()
 
 	file (GLOB DLL RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
-		"${SRC_DIR}/[^.]*.cpp"
-		"${SRC_DIR}/[^.]*.hpp"
-		"${SRC_DIR}/[^.]*.h"
-		"${SRC_DIR}/[^.]*.in"
+		"${SRC_DIR}/zbtunnel/[^.]*.cpp"
+		"${SRC_DIR}/zbtunnel/[^.]*.hpp"
+		"${SRC_DIR}/zbtunnel/[^.]*.h"
+		"${SRC_DIR}/zbtunnel/[^.]*.in"
 		)
 
-	configure_file("${SRC_DIR}/zbconfig_inc.hpp.in" "${BINARY_DIR}/zbconfig_inc.hpp")
-	source_group(GENERATED FILES "${BINARY_DIR}/zbconfig_inc.hpp")
+	configure_file("${SRC_DIR}/zbtunnel/zbconfig_inc.hpp.in" "${BINARY_DIR}/zbtunnel/zbconfig_inc.hpp")
+	source_group(GENERATED FILES "${BINARY_DIR}/zbtunnel/zbconfig_inc.hpp")
 		
-	list(REMOVE_ITEM DLL "${SRC_DIR}/main.cpp")
+	list(REMOVE_ITEM DLL "${SRC_DIR}/zbtunnel/main.cpp")
 
+	include_directories("${SRC_DIR}")
 	include_directories("${BINARY_DIR}")
 	include_directories(${Boost_INCLUDE_DIRS})
 	if (WITH_OPENSSL)
@@ -56,8 +57,8 @@ macro (build_zbtunnel SRC_DIR BINARY_DIR)
 
 	link_directories(${Boost_LIBRARY_DIRS})
 
-	add_library(zbtunnel_lib ${DLL} "${BINARY_DIR}/zbconfig_inc.hpp")
-	add_executable(zbtunnel "${SRC_DIR}/main.cpp")
+	add_library(zbtunnel_lib ${DLL} "${BINARY_DIR}/zbtunnel/zbconfig_inc.hpp")
+	add_executable(zbtunnel "${SRC_DIR}/zbtunnel/main.cpp")
 	add_dependencies(zbtunnel zbtunnel_lib)
 
 	if (WITH_OPENSSL)
