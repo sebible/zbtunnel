@@ -163,6 +163,7 @@ namespace zb {
 			manager_->preconnect(CONFIG_GET_INT(conf0, "preconnect", gconf.preconnect()));
 			manager_->max_reuse(CONFIG_GET_INT(conf0, "max_reuse", gconf.max_reuse()));
 			manager_->recycle((CONFIG_GET_INT(conf0, "recycle", gconf.recycle())) != 0);
+			manager_->kill_reusable();
 
 			if (acceptor_.get() != 0 && (old_local_port_ != local_port_ || old_local_address_.compare(local_address_) != 0)) {
 				acceptor_->close();

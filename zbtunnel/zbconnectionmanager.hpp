@@ -70,6 +70,13 @@ namespace zb {
 					conns_.erase(p);
 				}
 
+				kill_reusable();
+			}
+
+			void kill_reusable() {
+				gconf.log(gconf_type::DEBUG_CONNECTION_MANAGER, gconf_type::ZBLOG_INFO, "ZbConnectionManager", string("Force kill all resuable-connections"));
+
+				ZbConnection::pointer p;
 				while (reusable_conns_.size()){
 					p = (*reusable_conns_.begin());
 					if (p.get() != 0) p->stop(false, false);

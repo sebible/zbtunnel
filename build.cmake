@@ -1,18 +1,21 @@
 
-macro (build_zbtunnel SRC_DIR BINARY_DIR)
+macro (build_zbtunnel SRC_DIR BINARY_DIR BUILD_EXECUTABLE FIND_BOOST)
 
+	if (${FIND_BOOST})
+	message("find boost")
 	set(Boost_USE_STATIC_LIBS TRUE)
 	set(Boost_USE_STATIC_RUNTIME TRUE)
 	set(Boost_USE_MULTITHREADED TRUE)
-
 	find_package(Boost 1.47.0 COMPONENTS system thread)
 	if (NOT Boost_FOUND)
 	find_package(Boost REQUIRED COMPONENTS system thread)
 	endif ()
+	endif ()
 
 	if (WITH_OPENSSL)
+	message("with openssl")
 	find_package(OpenSSL)
-	if (NOT OpenSSL_FOUND)
+	if (OpenSSL_NOTFOUND)
 	find_package(OpenSSL REQUIRED)
 	endif ()
 	endif ()
@@ -58,20 +61,21 @@ macro (build_zbtunnel SRC_DIR BINARY_DIR)
 	link_directories(${Boost_LIBRARY_DIRS})
 
 	add_library(zbtunnel_lib ${DLL} "${BINARY_DIR}/gen/zbtunnel/zbconfig_inc.hpp")
-	add_executable(zbtunnel "${SRC_DIR}/zbtunnel/main.cpp")
-	add_dependencies(zbtunnel zbtunnel_lib)
-
 	if (WITH_OPENSSL)
 	target_link_libraries(zbtunnel_lib ${OPENSSL_LIBRARIES})
 	endif ()
 	target_link_libraries(zbtunnel_lib ${Boost_LIBRARIES})
-	target_link_libraries(zbtunnel zbtunnel_lib)
-
-	set_target_properties(zbtunnel PROPERTIES 
-		OUTPUTNAME "zbtunnel" 
-		)
-		
 	set_target_properties(zbtunnel_lib PROPERTIES 
 		OUTPUTNAME "zbtunnel" 
 	)
+
+	if (${BUILD_EXECUTABLE})
+	add_executable(zbtunnel "${SRC_DIR}/zbtunnel/main.cpp")
+	add_dependencies(zbtunnel zbtunnel_lib)
+	target_link_libraries(zbtunnel zbtunnel_lib ${Boost_LIBRARIES})
+	set_target_properties(zbtunnel PROPERTIES 
+		OUTPUTNAME "zbtunnel" 
+		)
+	endif ()
+		
 endmacro (build_zbtunnel)

@@ -10,12 +10,14 @@ endif ()
 set(ZB_DISPLAY_NAME "ZbTunnel")
 set(ZB_VERSION "1.0")
 
+if (WIN32)
 set(BOOST_ROOT "d:/repo/boost")
 set(BOOST_LIBRARYDIR "d:/repo/boost/lib")
 set(OPENSSL_ROOT_DIR "d:/repo/openssl")
+endif ()
 
 include(build.cmake)
-build_zbtunnel("." "${PROJECT_BINARY_DIR}")
+build_zbtunnel("." "${PROJECT_BINARY_DIR}" 1 1)
 if (UNIX)
     install(TARGETS zbtunnel zbtunnel_lib 
         RUNTIME DESTINATION bin 
