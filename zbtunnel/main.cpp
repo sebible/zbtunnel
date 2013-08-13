@@ -8,16 +8,7 @@ namespace zb {
 	namespace tunnel {
 
 		string banner() {
-			return string(DISPLAY_NAME " " VERSION 
-		#ifdef WITH_OPENSSL
-			" openssl" 
-		#endif
-		#ifndef WIN32
-		#ifndef DISABLE_EPOLL
-			" epoll"
-		#endif
-		#endif
-			"\n");
+			return string(DISPLAY_NAME " " VERSION ZBTUNNEL_BUILD_STRING "\n");
 		}
 
 		string usage(string exe) {

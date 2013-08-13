@@ -4,6 +4,30 @@
 
 #define UA_STRING DISPLAY_NAME "/" VERSION
 
+
+#define ZB_OPENSSL_STRING 
+#define ZB_EPOLL_STRING 
+#define ZB_DEBUG_STRING release
+
+#ifdef WITH_OPENSSL
+#define ZB_OPENSSL_STRING openssl
+#endif
+
+#ifndef WIN32
+#ifndef DISABLE_EPOLL
+#define ZB_EPOLL_STRING epoll
+#endif
+#endif
+
+#ifdef DEBUG
+#define ZB_DEBUG_STRING debug
+#endif
+
+#define STR2(x) " "#x
+#define STR(x) STR2(x)
+
+#define ZBTUNNEL_BUILD_STRING STR(ZB_OPENSSL_STRING) STR(ZB_EPOLL_STRING) STR(ZB_DEBUG_STRING)
+
 #ifdef DISABLE_EPOLL
 #define BOOST_ASIO_DISABLE_EPOLL
 #endif
