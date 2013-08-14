@@ -42,6 +42,8 @@ namespace zb {
 			typedef shared_ptr<ZbConnection> pointer;
 			typedef weak_ptr<ZbTunnel> client_ptr;
 			typedef uint8_t buf_type[2][BUFSIZE]; // 0 for read, 1 for write
+
+			~ZbConnection();
 		
 			static pointer create(shared_ptr<io_service>& io_service, client_ptr client);
 

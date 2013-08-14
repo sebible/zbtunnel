@@ -41,6 +41,16 @@ namespace zb {
 
 			start_with_config(chain_conf);
 		}
+
+		void ZbTunnel::start_with_config(chain_config_type& config) throw (string) {
+			if (running_ && io_service_.get() != 0 && !io_service_->stopped()) {
+				gconf.log(gconf_type::DEBUG_TUNNEL, gconf_type::ZBLOG_DEBUG, "ZbTunnel", name_ + ": Starting with config async");
+				io_service_->post(boost::bind(&ZbTunnel::_start_with_config, shared_from_this(), config));
+			} else {
+				gconf.log(gconf_type::DEBUG_TUNNEL, gconf_type::ZBLOG_DEBUG, "ZbTunnel", name_ + ": Starting with config");
+				_start_with_config(config);
+			}
+		}
 	
 		void ZbTunnel::worker() {
 			assert(io_service_.get() != 0);
@@ -80,10 +90,10 @@ namespace zb {
 		}
 
 		void ZbTunnel::stop() {
-			running_ = false;
 			assert(io_service_.get() != 0);
 			if (!io_service_->stopped() && running_)
 				io_service_->post(boost::bind(&ZbTunnel::_stop_impl, shared_from_this()));
+			running_ = false;
 		}
 
 		void ZbTunnel::_stop_impl() {
@@ -128,7 +138,7 @@ namespace zb {
 		ZbSocketTunnel::~ZbSocketTunnel() {
 		}
 
-		void ZbSocketTunnel::start_with_config(chain_config_type& config)  throw (string){
+		void ZbSocketTunnel::_start_with_config(chain_config_type config)  throw (string){
 			config_ = config;
 			if (config.size() == 0)
 				throw string("There has to be at least 1 config");
@@ -164,6 +174,8 @@ namespace zb {
 			manager_->max_reuse(CONFIG_GET_INT(conf0, "max_reuse", gconf.max_reuse()));
 			manager_->recycle((CONFIG_GET_INT(conf0, "recycle", gconf.recycle())) != 0);
 			manager_->kill_reusable();
+
+			endpoint_cache_.reset();
 
 			if (acceptor_.get() != 0 && (old_local_port_ != local_port_ || old_local_address_.compare(local_address_) != 0)) {
 				acceptor_->close();

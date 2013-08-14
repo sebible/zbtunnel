@@ -45,6 +45,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/function.hpp>
 #include <boost/foreach.hpp>
+#include <boost/format.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
 
@@ -74,6 +75,7 @@ namespace chrono = boost::chrono;
 using boost::shared_ptr;
 using boost::scoped_ptr;
 using boost::weak_ptr;
+using boost::format;
 using std::vector;
 using std::map;
 using std::string;

@@ -21,6 +21,13 @@ namespace zb {
 		{
 		}
 
+		ZbConnection::~ZbConnection() {
+			format f(" destroyed. in ref:%d out ref:%d");
+			f = f % in_.use_count() % out_.use_count();
+			gtrace("ZbConnection", f.str());
+			gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::ZBLOG_INFO, "ZbConnection", to_string() + " is destroyed.");
+		}
+
 		string ZbConnection::to_string() {
 			std::stringstream s;
 			s << owner_ << "#" << boost::lexical_cast<string>(id_) << "." << current_;
@@ -42,6 +49,7 @@ namespace zb {
 		void ZbConnection::start(TransportPointer in)
 		{
 			in_ = in;
+			gtrace("ZbConnection", (format("starting. in ref:%d") % in_.use_count()).str());
 
 			if (state_ == CONNECTED) {
 				// Start transfer right away;
@@ -94,6 +102,7 @@ namespace zb {
 			if (in_.get() == 0) {
 				recycle = false;
 			} else {
+				gtrace("ZbConnection", (format("closeing in ref:%d") % in_.use_count()).str());
 				in_->close();
 				in_.reset();
 			}
@@ -114,6 +123,7 @@ namespace zb {
 				gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::ZBLOG_INFO, "ZbConnection", to_string() + string(" stopped") + ((err1.empty() && err2.empty()) ? "" : " with error"));
 				if (!err1.empty()) gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::ZBLOG_DEBUG, "ZbConnection", string("in: ") + err1);
 				if (!err2.empty()) gconf.log(gconf_type::DEBUG_CONNECTION, gconf_type::ZBLOG_DEBUG, "ZbConnection", string("out: ") + err2);
+				gtrace("ZbConnection", (format("stopping. in ref:%d out ref:%d") % in_.use_count() % out_.use_count()).str());
 				out_->close();
 				// Hold out_ in case there are some async ops to be finished
 			}

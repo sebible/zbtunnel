@@ -53,7 +53,8 @@ namespace zb {
 			void start() {running_=true; _start();};
 			void stop();
 			void _stop_impl();
-			virtual void start_with_config(chain_config_type& config) throw (string) {throw string("not implemented");};
+			virtual void start_with_config(chain_config_type& config) throw (string);
+			virtual void _start_with_config(chain_config_type config) throw (string) {throw string("not implemented");};
 			virtual void _start() {throw string("not implemented");};
 			virtual void _stop() {throw string("not implemented");};
 
@@ -99,7 +100,7 @@ namespace zb {
 			string local_address() {return acceptor_.get() != 0 ? acceptor_->local_endpoint().address().to_string() : local_address_;};
 			int local_port() {return acceptor_.get() != 0 ? acceptor_->local_endpoint().port() : local_port_;};
 
-			virtual void start_with_config(chain_config_type& config) throw (string);
+			virtual void _start_with_config(chain_config_type config) throw (string);
 			virtual void _start();
 			virtual void _stop();
 

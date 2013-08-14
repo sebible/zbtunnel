@@ -43,7 +43,8 @@ namespace zb {
 				DEBUG_CODER=64,
 				DEBUG_STDIO=128,
 				DEBUG_CONNECTION_MANAGER=256,
-				DEBUG_ALL=0xff
+				DEBUG_TRACE=512,
+				DEBUG_ALL=0xffff
 			};
 
 			enum log_level_type {
@@ -65,6 +66,7 @@ namespace zb {
 		
 			void log(unsigned int f, log_level_type l, string module, string msg) {log_(f, l, module, msg);}
 			void flush() {if (out_) out_->flush();}
+			void trace(string module, string msg) {log_(DEBUG_TRACE, ZBLOG_DEBUG, module, string("trace: ") + msg);}
 		
 			static ZbConfig *get() {
 				if (!ZbConfig::instance_)
@@ -103,6 +105,11 @@ namespace zb {
 };
 
 #define gconf (*zb::tunnel::ZbConfig::get())
+#ifdef DEBUG
+#define gtrace(src, msg) zb::tunnel::ZbConfig::get()->trace(src, msg);
+#else
+#define gtrace(src, msg)
+#endif
 #define CONFIG_GET(conf, name, _default) conf.count(name) ? conf[name] : _default
 #define CONFIG_GET_INT(conf, name, _default) conf.count(name) ? boost::lexical_cast<int>(conf[name]) : _default
 #define THROW(str) throw string(str)	

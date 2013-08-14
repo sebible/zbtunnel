@@ -54,7 +54,15 @@ namespace zb {
 			ZbTransport(const pointer& parent):parent_(parent) {
 				if (parent_.get() && parent->io_service_.get() != 0)
 					io_service_ = parent->io_service_;
+
+				format f("parent ref:%d");
+				gtrace("ZbTransport", string("creating ") + (f % parent_.use_count()).str());
 			};
+
+			~ZbTransport() {
+				format f("parent ref:%d");
+				gtrace("ZbTransport", string("destroy ") + (f % parent_.use_count()).str());
+			}
 
 			io_service& get_io_service() {
 				assert(io_service_.get() != 0);
@@ -369,7 +377,7 @@ namespace zb {
 					invoke_callback(boost::bind(handler, make_error_code(errc::connection_aborted), 0));
 					return;
 				}
-				gconf.log(gconf_type::DEBUG_SOCKS, gconf_type::ZBLOG_DEBUG, "ZbSocketTransport", string("Sending:\n") + string((char*)data, size));
+				gconf.log(gconf_type::DEBUG_SOCKS, gconf_type::ZBLOG_DEBUG, "ZbSocketTransport", string("Sending: ") + boost::lexical_cast<string>(size) + " bytes");
 				socket_->async_send(boost::asio::buffer(data, size), handler);
 			};
 
@@ -511,14 +519,14 @@ namespace zb {
 				void async_write_some(const boost::asio::mutable_buffer& buffer,
 					const ZbTransport::write_handler_type& handler) {
 					assert(p_.get() != 0);
-					p_->parent_->async_write_some(buffer, handler);
+					p_->async_write_some(buffer, handler);
 				}
             
 				void async_read_some(const boost::asio::mutable_buffer& buffer,
 				const ZbTransport::read_handler_type& handler)
 			{
 					assert(p_.get() != 0);
-					p_->parent_->async_read_some(buffer, handler);
+					p_->async_read_some(buffer, handler);
 				}
             
 				io_service& get_io_service() {
@@ -554,13 +562,15 @@ namespace zb {
 					ctx.reset(new boost::asio::ssl::context(boost::asio::ssl::context::tlsv1));
 			}
 
-					~ZbHttpsTransport() {
-						holder_.p(ZbTransport::pointer());
-					}
+			~ZbHttpsTransport() {
+				stream_.reset();
+				ctx.reset();
+				holder_.p();
+			}
 
 			virtual void init(const connect_handler_type& handler) {
 				assert(stream_.get() == 0);
-							holder_.p(shared_from_this());
+				holder_.p(parent_);
 				stream_.reset(new stream_type(holder_, *ctx));
 				stream_->async_handshake(boost::asio::ssl::stream_base::client, handler);
 			}
