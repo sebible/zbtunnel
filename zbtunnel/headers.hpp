@@ -5,21 +5,24 @@
 #define UA_STRING DISPLAY_NAME "/" VERSION
 
 
-#define ZB_OPENSSL_STRING 
-#define ZB_EPOLL_STRING 
+#define ZB_OPENSSL_STRING noopenssl
+#define ZB_EPOLL_STRING noepoll
 #define ZB_DEBUG_STRING release
 
 #ifdef WITH_OPENSSL
+#undef ZB_OPENSSL_STRING
 #define ZB_OPENSSL_STRING openssl
 #endif
 
 #ifndef WIN32
 #ifndef DISABLE_EPOLL
+#undef ZB_EPOLL_STRING
 #define ZB_EPOLL_STRING epoll
 #endif
 #endif
 
 #ifdef DEBUG
+#undef ZB_DEBUG_STRING
 #define ZB_DEBUG_STRING debug
 #endif
 
