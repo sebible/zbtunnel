@@ -204,7 +204,7 @@ namespace zb {
 				boost::bind(&ZbSocketTunnel::handle_accept<ZbSocketTransport::pointer>, boost::static_pointer_cast<ZbSocketTunnel>(shared_from_this()), tp,
 					boost::asio::placeholders::error));
 
-			gconf.log(gconf_type::DEBUG_TUNNEL, gconf_type::ZBLOG_DEBUG, "ZbSocketTunnel", name_ + ": Accepting...");
+			gdebug(gconf_type::DEBUG_TUNNEL, "ZbSocketTunnel", name_ + ": Accepting...");
 		}
 
 		template <typename SocketTransportPointer>

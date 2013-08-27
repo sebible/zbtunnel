@@ -363,10 +363,9 @@ namespace zb {
 			}
 
 			void _handle_connected(const error_code& error, const connect_handler_type& handler) {
-				/*if (!error) {
+				if (!error) {
 					socket_->set_option(tcp::no_delay(true));
-					socket_->set_option(boost::asio::socket_base::keep_alive(true));
-				}*/
+				}
 				invoke_callback(boost::bind(handler, error));
 			}
 
@@ -377,7 +376,7 @@ namespace zb {
 					invoke_callback(boost::bind(handler, make_error_code(errc::connection_aborted), 0));
 					return;
 				}
-				gconf.log(gconf_type::DEBUG_SOCKS, gconf_type::ZBLOG_DEBUG, "ZbSocketTransport", string("Sending: ") + boost::lexical_cast<string>(size) + " bytes");
+				gdebug(gconf_type::DEBUG_SOCKS, "ZbSocketTransport", string("Sending: ") + boost::lexical_cast<string>(size) + " bytes");
 				socket_->async_send(boost::asio::buffer(data, size), handler);
 			};
 
@@ -431,12 +430,12 @@ namespace zb {
 			virtual void handle_read_data(data_type data, size_t size) {
 				assert(coder_.get() != 0);
 				coder_->decrypt(data, data, size);
-				gconf.log(gconf_type::DEBUG_SHADOW, gconf_type::ZBLOG_DEBUG, "ZbShadowTransport", string("decoded: ") + string((char*)data, size));
+				gdebug(gconf_type::DEBUG_SHADOW, "ZbShadowTransport", string("decoded: ") + string((char*)data, size));
 			};
 
 			virtual void handle_write_data(data_type data, size_t size) {
 				assert(coder_.get() != 0);
-				gconf.log(gconf_type::DEBUG_SHADOW, gconf_type::ZBLOG_DEBUG, "ZbShadowTransport", string("encoded: ") + string((char*)data, size));
+				gdebug(gconf_type::DEBUG_SHADOW, "ZbShadowTransport", string("encoded: ") + string((char*)data, size));
 				coder_->encrypt(data, data, size);
 			};
 		}; // ZbShadowTransport
@@ -472,7 +471,7 @@ namespace zb {
 				}
 				s << "\r\n";
 				connect_string = s.str();
-				gconf.log(gconf_type::DEBUG_HTTP, gconf_type::ZBLOG_DEBUG, "ZbHttpTransport", string("connecting\n") + connect_string);
+				gdebug(gconf_type::DEBUG_HTTP, "ZbHttpTransport", string("connecting\n") + connect_string);
 				async_send((const data_type)(connect_string.c_str()), connect_string.size(), boost::bind(&ZbTransport::_dummy_write_handler, boost::static_pointer_cast<ZbHttpTransport>(shared_from_this()), _1, _2));
 				async_receive(buf, sizeof(buf), boost::bind(&ZbHttpTransport::_handle_http_connect, boost::static_pointer_cast<ZbHttpTransport>(shared_from_this()), _1, _2, handler));
 			};
@@ -486,9 +485,9 @@ namespace zb {
 
 				pos += size;
 				if (pos > 4 && string((char*)(buf + pos - 4), 4).compare("\r\n\r\n") == 0) {
-					gconf.log(gconf_type::DEBUG_HTTP, gconf_type::ZBLOG_DEBUG, "ZbHttpTransport", string("received\n") + string((char*)buf, pos));
+					gdebug(gconf_type::DEBUG_HTTP, "ZbHttpTransport", string("received\n") + string((char*)buf, pos));
 					char code = *(buf + 9);
-					gconf.log(gconf_type::DEBUG_HTTP, gconf_type::ZBLOG_DEBUG, "ZbHttpTransport", string("result code:") + string((char*)buf + 9, 3));
+					gdebug(gconf_type::DEBUG_HTTP, "ZbHttpTransport", string("result code:") + string((char*)buf + 9, 3));
 					if (code == '2') {
 						invoke_callback(boost::bind(handler, error));
 					} else {

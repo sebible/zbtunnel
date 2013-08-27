@@ -30,7 +30,7 @@ namespace zb {
 			if (key.empty())
 				throw string("empty key");
 
-			if (method.empty() || method.compare("shadow") == 0) {
+			if (method.empty() || method.compare("table") == 0) {
 				ZbTableCoder *c = new ZbTableCoder(method, key);
 				pool_[k] = shared_ptr<ZbCoder>(c);
 				return pool_[k];
@@ -41,15 +41,11 @@ namespace zb {
 
 		// Shadow table coder
 		ZbTableCoder::ZbTableCoder(string method, string key):ZbCoder(method, key), enc_table_(0), dec_table_(0), initialized_(false) {
-			if (method.empty()) {
-				if (key.empty()) {
-					throw string("empty key");
-				}
-
-				coder_worker_.reset(new boost::thread(boost::bind(&ZbTableCoder::make_table, this, key)));
-			} else {
-				throw string("unsupported");
+			if (key.empty()) {
+				throw string("empty key");
 			}
+
+			coder_worker_.reset(new boost::thread(boost::bind(&ZbTableCoder::make_table, this, key)));
 		}
 
 		ZbTableCoder::~ZbTableCoder() {
@@ -86,10 +82,11 @@ namespace zb {
 
 			initialized_ = true;
 			gconf.log(gconf_type::DEBUG_CODER, gconf_type::ZBLOG_DEBUG, "ZbTableCoder", "Initialized");
+			coder_worker_.reset();
 		}
 
 		void ZbTableCoder::wait_for_worker() {
-			if (coder_worker_.get() != 0 && !initialized_)
+			if (!initialized_ && coder_worker_.get() != 0)
 				coder_worker_->join();
 		}
 

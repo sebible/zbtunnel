@@ -107,8 +107,10 @@ namespace zb {
 #define gconf (*zb::tunnel::ZbConfig::get())
 #ifdef DEBUG
 #define gtrace(src, msg) zb::tunnel::ZbConfig::get()->trace(src, msg);
+#define gdebug(filter, src, msg) zb::tunnel::ZbConfig::get()->log(filter, gconf_type::ZBLOG_DEBUG, src, msg)
 #else
 #define gtrace(src, msg)
+#define gdebug(filter, src, msg)
 #endif
 #define CONFIG_GET(conf, name, _default) conf.count(name) ? conf[name] : _default
 #define CONFIG_GET_INT(conf, name, _default) conf.count(name) ? boost::lexical_cast<int>(conf[name]) : _default

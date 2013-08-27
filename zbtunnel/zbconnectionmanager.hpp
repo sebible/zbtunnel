@@ -51,13 +51,13 @@ namespace zb {
 
 			void add(ZbConnection::pointer conn) {
 				conns_.insert(conn);
-				gconf.log(gconf_type::DEBUG_CONNECTION_MANAGER, gconf_type::ZBLOG_DEBUG, "ZbConnectionManager", conn->to_string() + string(" added."));
+				gdebug(gconf_type::DEBUG_CONNECTION_MANAGER, "ZbConnectionManager", conn->to_string() + string(" added."));
 			}
 
 			void remove(ZbConnection::pointer conn) {
 				conns_.erase(conn);
 				reusable_conns_.erase(conn);
-				gconf.log(gconf_type::DEBUG_CONNECTION_MANAGER, gconf_type::ZBLOG_DEBUG, "ZbConnectionManager", conn->to_string() + string(" removed."));
+				gdebug(gconf_type::DEBUG_CONNECTION_MANAGER, "ZbConnectionManager", conn->to_string() + string(" removed."));
 			}
 
 			void stop_all() {
@@ -114,7 +114,7 @@ namespace zb {
 						q->owner(name_);
 						q->start();
 						reusable_conns_.insert(q);
-						gconf.log(gconf_type::DEBUG_CONNECTION_MANAGER, gconf_type::ZBLOG_DEBUG, "ZbConnectionManager", q->to_string() + string(" is created for preconnecting."));
+						gdebug(gconf_type::DEBUG_CONNECTION_MANAGER, "ZbConnectionManager", q->to_string() + string(" is created for preconnecting."));
 					}
 				}
 				return p;
