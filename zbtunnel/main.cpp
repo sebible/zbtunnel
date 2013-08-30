@@ -104,6 +104,8 @@ namespace zb {
 							tg_.add_thread(tr);
 						}
 					}
+
+					pt.clear();
 		
 					if (tunnels_.size() == 0) {
 						*err_ << "No tunnel definition is found. Abort.\n";
